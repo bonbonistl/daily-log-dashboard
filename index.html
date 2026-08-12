@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Daily Log Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="authGate" class="auth-gate">
+    <div class="auth-card">
+      <h1>Daily Log Dashboard</h1>
+      <p>This dashboard is private. Sign in with Google to continue.</p>
+      <button id="signInBtn">Sign in with Google</button>
+      <p id="authStatus" class="auth-status"></p>
+    </div>
+  </div>
+
+  <div id="appShell" class="hidden">
+  <header>
+    <h1>Daily Log Dashboard</h1>
+    <div class="tabs">
+      <button class="tab-btn active" id="healthTabBtn" data-tab="health">Health</button>
+      <button class="tab-btn" id="spiritualTabBtn" data-tab="spiritual">Spiritual</button>
+    </div>
+    <div class="controls" id="healthControls">
+      <label>
+        Range
+        <select id="rangeSelect">
+          <option value="thisweek" selected>This Week (Mon–Sun)</option>
+          <option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="all">All time</option>
+        </select>
+      </label>
+      <button id="refreshBtn">Refresh</button>
+      <span id="healthUpdatedAt" class="updated-at"></span>
+    </div>
+    <div class="user-info">
+      <span id="userEmailLabel" class="updated-at"></span>
+      <button id="signOutBtn">Sign out</button>
+    </div>
+  </header>
+
+  <main id="app" class="tab-content">
+    <div class="subtabs">
+      <button class="subtab-btn active" id="overviewSubtabBtn">Overview</button>
+      <button class="subtab-btn" id="exerciseSubtabBtn">Exercise</button>
+      <button class="subtab-btn" id="fastingSubtabBtn">Fasting</button>
+    </div>
+
+    <div id="healthOverview" class="subtab-content">
+      <div id="loading">Loading data…</div>
+
+      <section class="panel hidden" id="todayPanel">
+        <div class="panel-heading-row">
+          <h2 id="todayHeading">Today</h2>
+          <button id="journalBtn">See Journal</button>
+        </div>
+        <div id="todayCards" class="cards"></div>
+        <div id="todayLastEntry" class="today-last"></div>
+      </section>
+
+      <section id="summaryCards" class="cards hidden"></section>
+
+      <section class="panel hidden" id="consistencyPanel">
+        <h2>Consistency <span class="hint">are you sticking with it?</span></h2>
+        <div id="consistencyCards" class="cards"></div>
+      </section>
+
+      <section class="panel hidden" id="gapsPanel">
+        <h2>Logging Gaps <span class="hint">days with missing categories</span></h2>
+        <div id="gapsGrid" class="gaps-grid"></div>
+        <div id="gapsList" class="gaps-list"></div>
+      </section>
+
+      <section class="panel hidden" id="nutritionPanel">
+        <h2>Nutrition <span class="hint">calories/protein are AI-approximated from your descriptions, not counted</span></h2>
+        <canvas id="nutritionChart" height="90"></canvas>
+      </section>
+
+      <section class="panel hidden" id="waterPanel">
+        <h2>Water Intake</h2>
+        <canvas id="waterChart" height="90"></canvas>
+      </section>
+
+      <section class="panel hidden" id="exercisePanel">
+        <h2>Exercise</h2>
+        <canvas id="exerciseChart" height="90"></canvas>
+        <canvas id="hrChart" height="90"></canvas>
+      </section>
+
+      <section class="panel hidden" id="weightPanel">
+        <h2>Weight Trend</h2>
+        <canvas id="weightChart" height="90"></canvas>
+      </section>
+    </div>
+
+    <div id="healthExercise" class="subtab-content hidden">
+      <section class="panel hidden" id="exTodayPanel">
+        <h2 id="exTodayHeading">Today</h2>
+        <div id="exTodayCards" class="cards"></div>
+      </section>
+
+      <h2 id="exRangeHeading" class="section-heading hidden">This Week</h2>
+      <section class="cards hidden" id="exCards"></section>
+
+      <section class="panel hidden" id="exTypePanel">
+        <h2>By Type <span class="hint">sessions, time, and distance per activity type</span></h2>
+        <div id="exTypeBreakdown" class="ex-type-grid"></div>
+      </section>
+
+      <section class="panel hidden" id="exDistancePanel">
+        <h2>Distance <span class="hint">walk + cycling miles per day</span></h2>
+        <canvas id="exDistanceChart" height="90"></canvas>
+      </section>
+
+      <section class="panel hidden" id="exMusclePanel">
+        <h2>Muscle Groups <span class="hint">strength sessions by focus area</span></h2>
+        <div id="exMuscleBreakdown" class="rol-breakdown"></div>
+      </section>
+
+      <section class="panel hidden" id="exWeightLevelPanel">
+        <h2>Dumbbell Weight <span class="hint">strength training load over time</span></h2>
+        <canvas id="exWeightLevelChart" height="90"></canvas>
+      </section>
+    </div>
+
+    <div id="healthFasting" class="subtab-content hidden">
+      <section class="cards hidden" id="fastCards"></section>
+
+      <section class="panel hidden" id="fastChartPanel">
+        <h2>Overnight Fast Length <span class="hint">last food one day to first food the next</span></h2>
+        <canvas id="fastChart" height="90"></canvas>
+      </section>
+
+      <section class="panel hidden" id="fastListPanel">
+        <h2>Nightly Breakdown</h2>
+        <div id="fastList" class="fast-list"></div>
+      </section>
+    </div>
+  </main>
+
+  <main id="spiritualApp" class="tab-content hidden">
+    <div id="rolLoading">Loading data…</div>
+
+    <section class="panel hidden" id="checkinPanel">
+      <div class="panel-heading-row">
+        <h2 id="checkinHeading">Today's Check-In</h2>
+        <div class="panel-heading-actions">
+          <span id="spiritualUpdatedAt" class="updated-at"></span>
+          <button id="managePracticesBtn">Manage Practices</button>
+        </div>
+      </div>
+      <div id="checkinGroups" class="checkin-groups"></div>
+    </section>
+
+    <section class="cards hidden" id="rolCards"></section>
+
+    <section class="panel hidden" id="rolGapsPanel">
+      <h2>Practice History <span class="hint">last 14 days</span></h2>
+      <div id="rolGrid" class="gaps-grid"></div>
+    </section>
+
+    <section class="panel hidden" id="rolBreakdownPanel">
+      <h2>By Practice <span class="hint">% of days done, last 14 days</span></h2>
+      <div id="rolBreakdown" class="rol-breakdown"></div>
+    </section>
+  </main>
+
+  <div id="practicesBackdrop" class="journal-backdrop"></div>
+  <aside id="practicesDrawer" class="journal-drawer">
+    <div class="journal-header">
+      <h2>Manage Practices</h2>
+      <button id="practicesCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <p class="hint drawer-hint">Choose which check-ins each practice shows up in. Uncheck all three to hide it without deleting its history.</p>
+    <div id="practicesList" class="practices-list"></div>
+    <form id="addPracticeForm" class="add-practice-form">
+      <input type="text" id="newPracticeName" placeholder="New practice name" maxlength="80" required />
+      <button type="submit">Add</button>
+    </form>
+  </aside>
+
+  <div id="journalBackdrop" class="journal-backdrop"></div>
+  <aside id="journalDrawer" class="journal-drawer">
+    <div class="journal-header">
+      <h2 id="journalTitle">Journal</h2>
+      <button id="journalCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <div id="journalSummary" class="journal-summary"></div>
+    <div id="journalList" class="journal-list"></div>
+  </aside>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script src="spiritual.js"></script>
+  <script src="exercise.js"></script>
+  <script src="fasting.js"></script>
+  <script src="tabs.js"></script>
+  <script src="auth.js"></script>
+</body>
+</html>
