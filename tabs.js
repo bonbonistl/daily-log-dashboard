@@ -1,27 +1,35 @@
-const healthTabBtn = document.getElementById("healthTabBtn");
-const spiritualTabBtn = document.getElementById("spiritualTabBtn");
-const healthApp = document.getElementById("app");
-const spiritualApp = document.getElementById("spiritualApp");
 const healthControls = document.getElementById("healthControls");
 
+// ---------- top-level tabs ----------
+const TOP_TABS = [
+  { key: "health", btnId: "healthTabBtn", contentId: "app" },
+  { key: "spiritual", btnId: "spiritualTabBtn", contentId: "spiritualApp" },
+  { key: "insights", btnId: "insightsTabBtn", contentId: "insightsApp" },
+];
+
 let spiritualLoaded = false;
+let insightsLoaded = false;
 
-function activateTab(tab) {
-  const isHealth = tab === "health";
-  healthTabBtn.classList.toggle("active", isHealth);
-  spiritualTabBtn.classList.toggle("active", !isHealth);
-  healthApp.classList.toggle("hidden", !isHealth);
-  spiritualApp.classList.toggle("hidden", isHealth);
-  healthControls.classList.toggle("hidden", !isHealth);
+function activateTab(key) {
+  TOP_TABS.forEach((t) => {
+    document.getElementById(t.btnId).classList.toggle("active", t.key === key);
+    document.getElementById(t.contentId).classList.toggle("hidden", t.key !== key);
+  });
+  healthControls.classList.toggle("hidden", key !== "health");
 
-  if (!isHealth && !spiritualLoaded) {
+  if (key === "spiritual" && !spiritualLoaded) {
     spiritualLoaded = true;
     loadSpiritualData();
   }
+  if (key === "insights" && !insightsLoaded) {
+    insightsLoaded = true;
+    loadInsightsData();
+  }
 }
 
-healthTabBtn.addEventListener("click", () => activateTab("health"));
-spiritualTabBtn.addEventListener("click", () => activateTab("spiritual"));
+TOP_TABS.forEach((t) => {
+  document.getElementById(t.btnId).addEventListener("click", () => activateTab(t.key));
+});
 
 // ---------- health sub-tabs ----------
 const HEALTH_SUBTABS = [

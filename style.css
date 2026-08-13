@@ -733,3 +733,76 @@ button:hover { border-color: var(--accent); }
 }
 .disruption-item .cause { color: var(--text); }
 .disruption-item .date { color: var(--muted); font-size: 12px; }
+
+/* ---------- insights ---------- */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px 12px;
+}
+.compare-header, .compare-row {
+  display: contents;
+}
+.compare-col-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.compare-col-label.disrupt { color: var(--danger); }
+.compare-col-label.normal { color: var(--accent); }
+.compare-col-label .hint { display: block; font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 11px; }
+
+.compare-metric {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+.compare-value {
+  font-size: 16px;
+  font-weight: 700;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+.compare-value.disrupt { color: var(--danger); }
+.compare-value.normal { color: var(--accent); }
+
+.insights-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.insights-day-card {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.insights-day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.insights-day-cause {
+  color: var(--accent2);
+  font-size: 13px;
+}
+.insights-day-row {
+  font-size: 13px;
+  color: var(--text);
+  margin-top: 4px;
+}
+.insights-day-label {
+  color: var(--muted);
+  margin-right: 4px;
+}
+.insights-day-food-list {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}

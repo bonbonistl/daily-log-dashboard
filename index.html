@@ -24,6 +24,7 @@
     <div class="tabs">
       <button class="tab-btn active" id="healthTabBtn" data-tab="health">Health</button>
       <button class="tab-btn" id="spiritualTabBtn" data-tab="spiritual">Spiritual</button>
+      <button class="tab-btn" id="insightsTabBtn" data-tab="insights">Insights</button>
     </div>
     <div class="controls" id="healthControls">
       <label>
@@ -191,6 +192,20 @@
     </section>
   </main>
 
+  <main id="insightsApp" class="tab-content hidden">
+    <div id="insightsLoading">Loading data…</div>
+
+    <section class="panel hidden" id="insightsComparePanel">
+      <h2>Disruption Days vs Normal Days <span class="hint">last 30 complete days — today excluded since it's still in progress</span></h2>
+      <div id="insightsCompareGrid" class="compare-grid"></div>
+    </section>
+
+    <section class="panel hidden" id="insightsDetailPanel">
+      <h2>Disruption Day Detail <span class="hint">practices missed and food/drink that day</span></h2>
+      <div id="insightsDetailList" class="insights-detail-list"></div>
+    </section>
+  </main>
+
   <div id="practicesBackdrop" class="journal-backdrop"></div>
   <aside id="practicesDrawer" class="journal-drawer">
     <div class="journal-header">
@@ -221,6 +236,7 @@
   <script src="spiritual.js"></script>
   <script src="exercise.js"></script>
   <script src="fasting.js"></script>
+  <script src="insights.js"></script>
   <script src="tabs.js"></script>
   <script src="auth.js"></script>
 </body>
