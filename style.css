@@ -638,3 +638,98 @@ button:hover { border-color: var(--accent); }
   cursor: pointer;
 }
 #signOutBtn:hover { color: var(--text); border-color: var(--danger); }
+
+/* ---------- check-in date nav ---------- */
+.checkin-date-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.checkin-date-nav button {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  color: var(--muted);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.checkin-date-nav button:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.checkin-date-nav button:disabled { opacity: 0.35; cursor: default; }
+
+/* ---------- disruption logging ---------- */
+.disruption-form {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--panel-border);
+}
+.disruption-form label {
+  display: block;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.disruption-form-row {
+  display: flex;
+  gap: 8px;
+}
+.disruption-form-row input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.disruption-form-row button {
+  background: var(--accent2);
+  border: none;
+  color: #0f1419;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.disruption-today-list {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.disruption-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(246, 173, 85, 0.1);
+  border: 1px solid rgba(246, 173, 85, 0.35);
+  color: var(--accent2);
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.disruption-chip button {
+  background: none;
+  border: none;
+  color: var(--accent2);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.disruption-list { margin-top: 16px; }
+.disruption-item {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+}
+.disruption-item .cause { color: var(--text); }
+.disruption-item .date { color: var(--muted); font-size: 12px; }

@@ -156,7 +156,20 @@
           <button id="managePracticesBtn">Manage Practices</button>
         </div>
       </div>
+      <div class="checkin-date-nav">
+        <button id="checkinPrevBtn">‹ Previous day</button>
+        <button id="checkinNextBtn">Next day ›</button>
+      </div>
       <div id="checkinGroups" class="checkin-groups"></div>
+
+      <div class="disruption-form">
+        <label for="disruptionCause">What got in the way today? <span class="hint">optional — helps spot trends</span></label>
+        <div class="disruption-form-row">
+          <input type="text" id="disruptionCause" placeholder="e.g. Community group, travel, sick..." maxlength="120" />
+          <button id="logDisruptionBtn">Log it</button>
+        </div>
+        <div id="disruptionTodayList" class="disruption-today-list"></div>
+      </div>
     </section>
 
     <section class="cards hidden" id="rolCards"></section>
@@ -169,6 +182,12 @@
     <section class="panel hidden" id="rolBreakdownPanel">
       <h2>By Practice <span class="hint">% of days done, last 14 days</span></h2>
       <div id="rolBreakdown" class="rol-breakdown"></div>
+    </section>
+
+    <section class="panel hidden" id="disruptionTrendsPanel">
+      <h2>What's Getting In The Way <span class="hint">last 14 days</span></h2>
+      <div id="disruptionBreakdown" class="rol-breakdown"></div>
+      <div id="disruptionList" class="fast-list disruption-list"></div>
     </section>
   </main>
 

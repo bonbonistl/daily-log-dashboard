@@ -4,7 +4,9 @@ const ROL_RANGE_DAYS = 14;
 
 let rolRows = [];
 let rolPractices = []; // [{id, name, morning, noon, night, sort_order}], ordered by sort_order
+let rolDisruptions = [];
 let spiritualLoadedOnce = false;
+let checkinDateOffset = 0; // 0 = today, 1 = yesterday, 2 = day before
 
 async function loadSpiritualData() {
   // Only blank the page on the first load — background refreshes update in place.
@@ -21,11 +23,13 @@ async function loadSpiritualData() {
     sb.from("rule_of_life_log").select("*").gte("log_date", toLocalDateStr(cutoff))
       .order("log_date", { ascending: true }).order("id", { ascending: true }),
     sb.from("rule_of_life_practices").select("*").order("sort_order", { ascending: true }),
+    sb.from("rule_of_life_disruptions").select("*").gte("log_date", toLocalDateStr(cutoff))
+      .order("log_date", { ascending: true }).order("id", { ascending: true }),
   ]);
 
-  let logRes, practicesRes;
+  let logRes, practicesRes, disruptionsRes;
   try {
-    [logRes, practicesRes] = await withTimeout(fetchPromise, 15000, "Loading spiritual data");
+    [logRes, practicesRes, disruptionsRes] = await withTimeout(fetchPromise, 15000, "Loading spiritual data");
   } catch (e) {
     document.getElementById("rolLoading").textContent = e.message;
     document.getElementById("rolLoading").classList.remove("hidden");
@@ -33,7 +37,7 @@ async function loadSpiritualData() {
   }
 
   document.getElementById("rolLoading").classList.add("hidden");
-  const error = logRes.error || practicesRes.error;
+  const error = logRes.error || practicesRes.error || disruptionsRes.error;
   if (error) {
     document.getElementById("rolLoading").textContent = "Error loading data: " + error.message;
     document.getElementById("rolLoading").classList.remove("hidden");
@@ -43,17 +47,26 @@ async function loadSpiritualData() {
   spiritualLoadedOnce = true;
   rolRows = logRes.data;
   rolPractices = practicesRes.data;
+  rolDisruptions = disruptionsRes.data;
   renderSpiritual();
 }
 
 function renderSpiritual() {
   const todayStr = todayLocalStr();
-  renderCheckin(todayStr);
+  renderCheckin();
   renderRolCards(todayStr);
   renderRolGrid(todayStr);
   renderRolBreakdown(todayStr);
   renderPracticesList();
+  renderDisruptionBreakdown();
+  renderDisruptionList();
   document.querySelectorAll("#spiritualApp .cards, #spiritualApp .panel").forEach((el) => el.classList.remove("hidden"));
+}
+
+function getCheckinViewDate() {
+  const d = new Date();
+  d.setDate(d.getDate() - checkinDateOffset);
+  return toLocalDateStr(d);
 }
 
 function rolDayRange(todayStr) {
@@ -71,14 +84,19 @@ function findRolRow(date, time, practice) {
   return rolRows.find((r) => r.log_date === date && r.time_of_day === time && r.practice === practice);
 }
 
-function renderCheckin(todayStr) {
-  document.getElementById("checkinHeading").textContent =
-    `Today's Check-In — ${new Date(todayStr + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}`;
+function renderCheckin() {
+  const viewDate = getCheckinViewDate();
+  const isToday = checkinDateOffset === 0;
+  const dateLabel = new Date(viewDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  document.getElementById("checkinHeading").textContent = isToday ? `Today's Check-In — ${dateLabel}` : `Check-In — ${dateLabel}`;
+
+  document.getElementById("checkinPrevBtn").disabled = checkinDateOffset >= 2;
+  document.getElementById("checkinNextBtn").disabled = checkinDateOffset <= 0;
 
   const html = TIMES_OF_DAY.map((time) => {
     const applicable = rolPractices.filter((p) => p[TIME_KEY[time]]);
     const items = applicable.map((p) => {
-      const row = findRolRow(todayStr, time, p.name);
+      const row = findRolRow(viewDate, time, p.name);
       const checked = !!row;
       return `
         <label class="rol-item ${checked ? "done" : ""}" data-time="${time}" data-practice="${p.name}" data-id="${row ? row.id : ""}">
@@ -104,24 +122,37 @@ function renderCheckin(todayStr) {
       toggleCheckin(label);
     });
   });
+
+  renderDisruptionToday(viewDate);
 }
 
 async function toggleCheckin(label) {
   const time = label.dataset.time;
   const practice = label.dataset.practice;
   const id = label.dataset.id;
-  const todayStr = todayLocalStr();
+  const viewDate = getCheckinViewDate();
 
   label.dataset.busy = "1";
   if (id) {
     const { error } = await sb.from("rule_of_life_log").delete().eq("id", id);
     if (error) { alert("Failed to update: " + error.message); delete label.dataset.busy; return; }
   } else {
-    const { error } = await sb.from("rule_of_life_log").insert({ log_date: todayStr, time_of_day: time, practice });
+    const { error } = await sb.from("rule_of_life_log").insert({ log_date: viewDate, time_of_day: time, practice });
     if (error) { alert("Failed to update: " + error.message); delete label.dataset.busy; return; }
   }
   await loadSpiritualData();
 }
+
+document.getElementById("checkinPrevBtn").addEventListener("click", () => {
+  if (checkinDateOffset >= 2) return;
+  checkinDateOffset++;
+  renderCheckin();
+});
+document.getElementById("checkinNextBtn").addEventListener("click", () => {
+  if (checkinDateOffset <= 0) return;
+  checkinDateOffset--;
+  renderCheckin();
+});
 
 function renderRolCards(todayStr) {
   const days = rolDayRange(todayStr);
@@ -207,6 +238,86 @@ function renderRolBreakdown(todayStr) {
       <div class="rol-breakdown-label">${r.practice}</div>
       <div class="rol-breakdown-bar-track"><div class="rol-breakdown-bar" style="width:${r.pct}%"></div></div>
       <div class="rol-breakdown-pct">${r.pct}% <span class="rol-breakdown-days">(${r.doneDays}/${r.total})</span></div>
+    </div>
+  `).join("");
+}
+
+// ---------- disruption tracking ----------
+// Chips for whatever's logged on the day currently being viewed in the check-in panel.
+function renderDisruptionToday(viewDate) {
+  const todays = rolDisruptions.filter((d) => d.log_date === viewDate);
+  document.getElementById("disruptionTodayList").innerHTML = todays.map((d) => `
+    <span class="disruption-chip" data-id="${d.id}">
+      ${d.cause}
+      <button aria-label="Remove">&times;</button>
+    </span>
+  `).join("");
+
+  document.querySelectorAll("#disruptionTodayList .disruption-chip button").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.closest(".disruption-chip").dataset.id;
+      const { error } = await sb.from("rule_of_life_disruptions").delete().eq("id", id);
+      if (error) { alert("Failed to remove: " + error.message); return; }
+      await loadSpiritualData();
+    });
+  });
+}
+
+async function logDisruption() {
+  const input = document.getElementById("disruptionCause");
+  const cause = input.value.trim();
+  if (!cause) return;
+  const viewDate = getCheckinViewDate();
+  const { error } = await sb.from("rule_of_life_disruptions").insert({ log_date: viewDate, cause });
+  if (error) { alert("Failed to log: " + error.message); return; }
+  input.value = "";
+  await loadSpiritualData();
+}
+
+document.getElementById("logDisruptionBtn").addEventListener("click", logDisruption);
+document.getElementById("disruptionCause").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); logDisruption(); }
+});
+
+// Groups causes by trimmed/lowercased text so similar entries ("Community group" vs
+// "community group") count together, while displaying the most common original casing.
+function renderDisruptionBreakdown() {
+  const groups = {};
+  rolDisruptions.forEach((d) => {
+    const key = d.cause.trim().toLowerCase();
+    if (!groups[key]) groups[key] = { count: 0, labelCounts: {} };
+    groups[key].count++;
+    groups[key].labelCounts[d.cause] = (groups[key].labelCounts[d.cause] || 0) + 1;
+  });
+
+  const entries = Object.values(groups).map((g) => ({
+    count: g.count,
+    label: Object.keys(g.labelCounts).sort((a, b) => g.labelCounts[b] - g.labelCounts[a])[0],
+  }));
+
+  document.getElementById("disruptionTrendsPanel").classList.toggle("hidden", entries.length === 0);
+  if (!entries.length) return;
+
+  const maxCount = Math.max(...entries.map((e) => e.count));
+  entries.sort((a, b) => b.count - a.count);
+
+  document.getElementById("disruptionBreakdown").innerHTML = entries.map((e) => {
+    const pct = Math.round((e.count / maxCount) * 100);
+    return `
+      <div class="rol-breakdown-row">
+        <div class="rol-breakdown-label">${e.label}</div>
+        <div class="rol-breakdown-bar-track"><div class="rol-breakdown-bar" style="width:${pct}%; background: ${CHART_COLORS.cal}"></div></div>
+        <div class="rol-breakdown-pct">${e.count} time${e.count === 1 ? "" : "s"}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderDisruptionList() {
+  document.getElementById("disruptionList").innerHTML = [...rolDisruptions].reverse().map((d) => `
+    <div class="disruption-item">
+      <span class="cause">${d.cause}</span>
+      <span class="date">${fmtShort(d.log_date)}</span>
     </div>
   `).join("");
 }
