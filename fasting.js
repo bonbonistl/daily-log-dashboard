@@ -46,31 +46,39 @@ function computeFastingWindows() {
 async function renderFastingDeepDive() {
   const windows = computeFastingWindows();
 
-  const { data, error } = await sb.from("fasting_exclusions").select("from_date");
-  if (!error) fastingExclusions = new Set((data || []).map((e) => e.from_date));
+  // Fetch the most recent food entries independent of whatever date range is
+  // selected elsewhere, so "Current fast" stays accurate right at a range boundary
+  // (e.g. fasting from Sunday night into Monday when "This Week" is selected).
+  const [exclusionsRes, recentFoodRes] = await Promise.all([
+    sb.from("fasting_exclusions").select("from_date"),
+    sb.from("daily_log").select("log_date, log_time, details")
+      .eq("category", "Food & Drink")
+      .order("log_date", { ascending: false }).order("id", { ascending: false })
+      .limit(30),
+  ]);
+  if (!exclusionsRes.error) fastingExclusions = new Set((exclusionsRes.data || []).map((e) => e.from_date));
 
   const activeWindows = windows.filter((w) => !fastingExclusions.has(w.fromDate));
-  const hasData = windows.length > 0;
+  const hasWindowData = windows.length > 0;
 
-  document.getElementById("fastCards").classList.toggle("hidden", !hasData);
+  document.getElementById("fastCards").classList.remove("hidden");
   document.getElementById("fastChartPanel").classList.toggle("hidden", activeWindows.length === 0);
-  document.getElementById("fastListPanel").classList.toggle("hidden", !hasData);
-  if (!hasData) return;
+  document.getElementById("fastListPanel").classList.toggle("hidden", !hasWindowData);
 
-  renderFastCards(windows, activeWindows);
+  renderFastCards(windows, activeWindows, recentFoodRes.data || []);
   if (activeWindows.length) renderFastChart(activeWindows);
-  renderFastList(windows);
+  if (hasWindowData) renderFastList(windows);
 }
 
-function renderFastCards(windows, activeWindows) {
+function renderFastCards(windows, activeWindows, recentFoodRows) {
   const excludedCount = windows.length - activeWindows.length;
   const excludedNote = excludedCount ? ` (${excludedCount} excluded)` : "";
 
-  // Currently fasting? True if the most recent actual food (anywhere in the loaded
-  // range) wasn't today.
-  const foodRows = lastRows.filter((r) => r.category === "Food & Drink" && !isDrinkOnly(r.details || ""));
+  // Currently fasting? True if the most recent actual food (not drink) wasn't today.
   let mostRecent = null;
-  foodRows.forEach((r) => {
+  recentFoodRows.forEach((r) => {
+    const text = r.details || "";
+    if (isDrinkOnly(text)) return;
     const dt = parseLogTimeToDate(r.log_date, r.log_time);
     if (dt && (!mostRecent || dt > mostRecent)) mostRecent = dt;
   });
@@ -92,8 +100,10 @@ function renderFastCards(windows, activeWindows) {
       { label: "Longest fast", value: formatFastDuration(longest.hours), sub: `night of ${fmtShort(longest.fromDate)}` },
       { label: "Shortest fast", value: formatFastDuration(shortest.hours), sub: `night of ${fmtShort(shortest.fromDate)}`, cls: shortest.hours < FAST_SHORT_THRESHOLD_HOURS ? "warn" : "" },
     ]);
-  } else {
+  } else if (windows.length > 0) {
     cards.push({ label: "Avg overnight fast", value: "—", sub: `all ${windows.length} night${windows.length === 1 ? "" : "s"} excluded` });
+  } else {
+    cards.push({ label: "Avg overnight fast", value: "—", sub: "no completed overnight fasts yet" });
   }
 
   document.getElementById("fastCards").innerHTML = cards.map((c) => `
