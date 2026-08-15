@@ -308,6 +308,7 @@ function render(rows) {
   // deliberately hides (e.g. no strength sessions in range → hide muscle group panel).
   if (typeof renderExerciseDeepDive === "function") renderExerciseDeepDive();
   if (typeof renderFastingDeepDive === "function") renderFastingDeepDive();
+  if (typeof renderFoodPlanDeepDive === "function") renderFoodPlanDeepDive();
 }
 
 function renderToday(perDay, todayStr, lastFoodOverall) {

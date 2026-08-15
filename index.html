@@ -52,6 +52,7 @@
       <button class="subtab-btn active" id="overviewSubtabBtn">Overview</button>
       <button class="subtab-btn" id="exerciseSubtabBtn">Exercise</button>
       <button class="subtab-btn" id="fastingSubtabBtn">Fasting</button>
+      <button class="subtab-btn" id="planSubtabBtn">Plan</button>
     </div>
 
     <div id="healthOverview" class="subtab-content">
@@ -142,6 +143,22 @@
       <section class="panel hidden" id="fastListPanel">
         <h2>Nightly Breakdown</h2>
         <div id="fastList" class="fast-list"></div>
+      </section>
+    </div>
+
+    <div id="healthPlan" class="subtab-content hidden">
+      <div id="planLoading">Loading data…</div>
+
+      <section class="panel hidden" id="planPanel">
+        <div class="panel-heading-row">
+          <h2 id="planHeading">Plan</h2>
+        </div>
+        <p class="hint drawer-hint">Planning ahead doesn't count as eaten. Check an item off once you actually eat it, and it's logged to your journal — same as if you'd entered it yourself.</p>
+        <div class="checkin-date-nav">
+          <button id="planPrevBtn">‹ Previous day</button>
+          <button id="planNextBtn">Next day ›</button>
+        </div>
+        <div id="planGroups" class="checkin-groups"></div>
       </section>
     </div>
   </main>
@@ -236,6 +253,7 @@
   <script src="spiritual.js"></script>
   <script src="exercise.js"></script>
   <script src="fasting.js"></script>
+  <script src="food_plan.js"></script>
   <script src="insights.js"></script>
   <script src="tabs.js"></script>
   <script src="auth.js"></script>

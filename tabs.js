@@ -36,6 +36,7 @@ const HEALTH_SUBTABS = [
   { key: "overview", btnId: "overviewSubtabBtn", contentId: "healthOverview" },
   { key: "exercise", btnId: "exerciseSubtabBtn", contentId: "healthExercise" },
   { key: "fasting", btnId: "fastingSubtabBtn", contentId: "healthFasting" },
+  { key: "plan", btnId: "planSubtabBtn", contentId: "healthPlan" },
 ];
 
 function activateHealthSubtab(key) {
