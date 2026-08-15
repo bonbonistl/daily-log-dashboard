@@ -37,17 +37,25 @@ function renderPlan() {
   const dateLabel = new Date(planViewDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
   document.getElementById("planHeading").textContent = isToday ? `Today's Plan — ${dateLabel}` : `Plan — ${dateLabel}`;
 
+  renderPlanCards();
+
   document.getElementById("planGroups").innerHTML = PLAN_TIME_SLOTS.map((slot) => {
     const items = planRows.filter((r) => r.time_of_day === slot);
-    const itemsHtml = items.map((r) => `
+    const itemsHtml = items.map((r) => {
+      const macros = [
+        r.est_calories != null ? `~${Math.round(numOrNull(r.est_calories))} cal` : null,
+        r.est_protein_g != null ? `${Math.round(numOrNull(r.est_protein_g))}g protein` : null,
+      ].filter(Boolean).join(" · ");
+      return `
       <div class="plan-item ${r.logged_daily_log_id ? "done" : ""}" data-id="${r.id}" data-logged-id="${r.logged_daily_log_id || ""}">
         <label>
           <input type="checkbox" ${r.logged_daily_log_id ? "checked" : ""} />
-          <span>${r.item}</span>
+          <span>${r.item}${macros ? `<span class="plan-item-macro">${macros}</span>` : ""}</span>
         </label>
         <button class="plan-item-remove" aria-label="Remove">&times;</button>
       </div>
-    `).join("");
+    `;
+    }).join("");
     return `
       <div class="checkin-group">
         <h3>${slot}</h3>
@@ -69,6 +77,33 @@ function renderPlan() {
   document.querySelectorAll(".plan-add-form").forEach((form) => {
     form.addEventListener("submit", (e) => { e.preventDefault(); addPlanItem(form); });
   });
+}
+
+// Hypothetical macros for the day: total = everything planned, eaten = the subset
+// already checked off. Items without an AI estimate yet just contribute 0.
+function renderPlanCards() {
+  const cardsEl = document.getElementById("planCards");
+  if (!planRows.length) { cardsEl.innerHTML = ""; return; }
+
+  const sum = (rows, field) => rows.reduce((s, r) => s + (numOrNull(r[field]) || 0), 0);
+  const eaten = planRows.filter((r) => r.logged_daily_log_id);
+  const totalCal = sum(planRows, "est_calories");
+  const eatenCal = sum(eaten, "est_calories");
+  const totalProtein = sum(planRows, "est_protein_g");
+  const eatenProtein = sum(eaten, "est_protein_g");
+  const missing = planRows.filter((r) => r.est_calories == null).length;
+  const missingNote = missing ? ` (${missing} item${missing === 1 ? "" : "s"} missing an estimate)` : "";
+
+  cardsEl.innerHTML = [
+    { label: "Calories", value: `${Math.round(eatenCal)} / ${Math.round(totalCal)}`, sub: `eaten / planned today${missingNote}` },
+    { label: "Protein", value: `${Math.round(eatenProtein)}g / ${Math.round(totalProtein)}g`, sub: `eaten / planned today${missingNote}` },
+  ].map((c) => `
+    <div class="card">
+      <div class="label">${c.label}</div>
+      <div class="value">${c.value}</div>
+      <div class="sub">${c.sub}</div>
+    </div>
+  `).join("");
 }
 
 async function togglePlanItem(row) {

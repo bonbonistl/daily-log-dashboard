@@ -369,6 +369,12 @@ button:hover { border-color: var(--accent); }
   min-width: 0;
 }
 .plan-item label span { overflow-wrap: anywhere; }
+.plan-item-macro {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
 .plan-item input[type="checkbox"] {
   width: 18px;
   height: 18px;
