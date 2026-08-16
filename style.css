@@ -747,6 +747,27 @@ button:hover { border-color: var(--accent); }
   color: var(--text);
   margin-bottom: 8px;
 }
+.disruption-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.disruption-suggestion-chip {
+  background: none;
+  border: 1px dashed var(--panel-border);
+  color: var(--muted);
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.disruption-suggestion-chip:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  border-style: solid;
+}
+
 .disruption-form-row {
   display: flex;
   gap: 8px;

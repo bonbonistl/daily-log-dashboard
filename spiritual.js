@@ -5,6 +5,7 @@ const ROL_RANGE_DAYS = 14;
 let rolRows = [];
 let rolPractices = []; // [{id, name, morning, noon, night, sort_order}], ordered by sort_order
 let rolDisruptions = [];
+let allDisruptionCauses = []; // every cause ever logged, all-time — powers the reusable suggestion chips
 let spiritualLoadedOnce = false;
 let checkinDateOffset = 0; // 0 = today, 1 = yesterday, 2 = day before
 
@@ -25,11 +26,14 @@ async function loadSpiritualData() {
     sb.from("rule_of_life_practices").select("*").order("sort_order", { ascending: true }),
     sb.from("rule_of_life_disruptions").select("*").gte("log_date", toLocalDateStr(cutoff))
       .order("log_date", { ascending: true }).order("id", { ascending: true }),
+    // Unscoped by date (unlike the trend query above) so a cause you used months ago —
+    // like a recurring "Sabbath" — still shows up as a one-click suggestion today.
+    sb.from("rule_of_life_disruptions").select("cause"),
   ]);
 
-  let logRes, practicesRes, disruptionsRes;
+  let logRes, practicesRes, disruptionsRes, allCausesRes;
   try {
-    [logRes, practicesRes, disruptionsRes] = await withTimeout(fetchPromise, 15000, "Loading spiritual data");
+    [logRes, practicesRes, disruptionsRes, allCausesRes] = await withTimeout(fetchPromise, 15000, "Loading spiritual data");
   } catch (e) {
     document.getElementById("rolLoading").textContent = e.message;
     document.getElementById("rolLoading").classList.remove("hidden");
@@ -37,7 +41,7 @@ async function loadSpiritualData() {
   }
 
   document.getElementById("rolLoading").classList.add("hidden");
-  const error = logRes.error || practicesRes.error || disruptionsRes.error;
+  const error = logRes.error || practicesRes.error || disruptionsRes.error || allCausesRes.error;
   if (error) {
     document.getElementById("rolLoading").textContent = "Error loading data: " + error.message;
     document.getElementById("rolLoading").classList.remove("hidden");
@@ -48,6 +52,7 @@ async function loadSpiritualData() {
   rolRows = logRes.data;
   rolPractices = practicesRes.data;
   rolDisruptions = disruptionsRes.data;
+  allDisruptionCauses = allCausesRes.data;
   renderSpiritual();
 }
 
@@ -124,6 +129,7 @@ function renderCheckin() {
   });
 
   renderDisruptionToday(viewDate);
+  renderDisruptionSuggestions(viewDate);
 }
 
 async function toggleCheckin(label) {
@@ -263,9 +269,11 @@ function renderDisruptionToday(viewDate) {
   });
 }
 
-async function logDisruption() {
+// causeOverride lets the suggestion chips log a pick with one click, bypassing the
+// text input entirely — same insert path as typing it in and pressing "Log it".
+async function logDisruption(causeOverride) {
   const input = document.getElementById("disruptionCause");
-  const cause = input.value.trim();
+  const cause = (causeOverride != null ? causeOverride : input.value).trim();
   if (!cause) return;
   const viewDate = getCheckinViewDate();
   const { error } = await sb.from("rule_of_life_disruptions").insert({ log_date: viewDate, cause });
@@ -274,32 +282,53 @@ async function logDisruption() {
   await loadSpiritualData();
 }
 
-document.getElementById("logDisruptionBtn").addEventListener("click", logDisruption);
+document.getElementById("logDisruptionBtn").addEventListener("click", () => logDisruption());
 document.getElementById("disruptionCause").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); logDisruption(); }
 });
 
 // Groups causes by trimmed/lowercased text so similar entries ("Community group" vs
-// "community group") count together, while displaying the most common original casing.
-function renderDisruptionBreakdown() {
+// "community group") count together, while surfacing the most common original casing
+// and how many times each has been logged (most-used first).
+function groupCauses(rows) {
   const groups = {};
-  rolDisruptions.forEach((d) => {
+  rows.forEach((d) => {
     const key = d.cause.trim().toLowerCase();
     if (!groups[key]) groups[key] = { count: 0, labelCounts: {} };
     groups[key].count++;
     groups[key].labelCounts[d.cause] = (groups[key].labelCounts[d.cause] || 0) + 1;
   });
+  return Object.values(groups)
+    .map((g) => ({ count: g.count, label: Object.keys(g.labelCounts).sort((a, b) => g.labelCounts[b] - g.labelCounts[a])[0] }))
+    .sort((a, b) => b.count - a.count);
+}
 
-  const entries = Object.values(groups).map((g) => ({
-    count: g.count,
-    label: Object.keys(g.labelCounts).sort((a, b) => g.labelCounts[b] - g.labelCounts[a])[0],
-  }));
+// Reusable "pick it again" chips built from every cause ever logged (all-time, not just
+// the 14-day trend window) — a recurring thing like "Sabbath" is one click from then on,
+// not retyped every time. Causes already logged for the viewed day are hidden here since
+// they already show (with a remove option) in the today list below.
+function renderDisruptionSuggestions(viewDate) {
+  const todaysCauses = new Set(
+    rolDisruptions.filter((d) => d.log_date === viewDate).map((d) => d.cause.trim().toLowerCase())
+  );
+  const entries = groupCauses(allDisruptionCauses).filter((e) => !todaysCauses.has(e.label.trim().toLowerCase()));
+
+  document.getElementById("disruptionSuggestions").innerHTML = entries.map((e, i) => `
+    <button type="button" class="disruption-suggestion-chip" data-index="${i}">${e.label}</button>
+  `).join("");
+
+  document.querySelectorAll("#disruptionSuggestions .disruption-suggestion-chip").forEach((btn) => {
+    btn.addEventListener("click", () => logDisruption(entries[Number(btn.dataset.index)].label));
+  });
+}
+
+function renderDisruptionBreakdown() {
+  const entries = groupCauses(rolDisruptions);
 
   document.getElementById("disruptionTrendsPanel").classList.toggle("hidden", entries.length === 0);
   if (!entries.length) return;
 
   const maxCount = Math.max(...entries.map((e) => e.count));
-  entries.sort((a, b) => b.count - a.count);
 
   document.getElementById("disruptionBreakdown").innerHTML = entries.map((e) => {
     const pct = Math.round((e.count / maxCount) * 100);
