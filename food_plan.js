@@ -61,7 +61,9 @@ function renderPlan() {
         <h3>${slot}</h3>
         <div class="rol-checklist">${itemsHtml || `<div class="journal-empty">Nothing planned yet.</div>`}</div>
         <form class="plan-add-form" data-slot="${slot}">
-          <input type="text" placeholder="Add a food..." maxlength="200" />
+          <input type="text" class="plan-add-item" placeholder="Add a food..." maxlength="200" required />
+          <input type="number" class="plan-add-cal" placeholder="cal" min="0" step="1" required />
+          <input type="number" class="plan-add-protein" placeholder="prot g" min="0" step="1" required />
           <button type="submit">Add</button>
         </form>
       </div>
@@ -119,8 +121,14 @@ async function togglePlanItem(row) {
     if (updateError) { alert("Failed to update: " + updateError.message); delete row.dataset.busy; return; }
   } else {
     const item = planRows.find((r) => String(r.id) === planId);
+    // Carry the plan's estimate over as the journal entry's own estimate (est_calories/
+    // est_protein_g), not the real calories/protein_g columns — those are reserved for
+    // precise logged values, and a plan estimate is still just an estimate.
     const { data: inserted, error } = await sb.from("daily_log")
-      .insert({ log_date: planViewDate, log_time: nowTimeStr(), category: "Food & Drink", details: item.item })
+      .insert({
+        log_date: planViewDate, log_time: nowTimeStr(), category: "Food & Drink", details: item.item,
+        est_calories: item.est_calories, est_protein_g: item.est_protein_g,
+      })
       .select().single();
     if (error) { alert("Failed to log: " + error.message); delete row.dataset.busy; return; }
     const { error: updateError } = await sb.from("food_plan").update({ logged_daily_log_id: inserted.id }).eq("id", planId);
@@ -142,13 +150,24 @@ async function removePlanItem(row) {
 }
 
 async function addPlanItem(form) {
-  const input = form.querySelector("input[type=text]");
-  const item = input.value.trim();
-  if (!item) return;
+  const itemInput = form.querySelector(".plan-add-item");
+  const calInput = form.querySelector(".plan-add-cal");
+  const proteinInput = form.querySelector(".plan-add-protein");
+  const item = itemInput.value.trim();
+  const estCalories = calInput.value.trim();
+  const estProteinG = proteinInput.value.trim();
+  // Every plan item needs a calorie/protein estimate so the day's totals always add up —
+  // enforced here (and by a NOT NULL constraint in the DB as a backstop).
+  if (!item || estCalories === "" || estProteinG === "") {
+    alert("Please enter the food plus a calorie and protein estimate.");
+    return;
+  }
   const slot = form.dataset.slot;
-  const { error } = await sb.from("food_plan").insert({ log_date: planViewDate, time_of_day: slot, item });
+  const { error } = await sb.from("food_plan").insert({
+    log_date: planViewDate, time_of_day: slot, item,
+    est_calories: Number(estCalories), est_protein_g: Number(estProteinG),
+  });
   if (error) { alert("Failed to add: " + error.message); return; }
-  input.value = "";
   await renderFoodPlanDeepDive();
 }
 

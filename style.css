@@ -396,11 +396,11 @@ button:hover { border-color: var(--accent); }
 
 .plan-add-form {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 10px;
 }
 .plan-add-form input {
-  flex: 1;
   background: var(--bg);
   border: 1px solid var(--panel-border);
   color: var(--text);
@@ -408,6 +408,9 @@ button:hover { border-color: var(--accent); }
   border-radius: 6px;
   font-size: 13px;
 }
+.plan-add-form .plan-add-item { flex: 1; min-width: 120px; }
+.plan-add-form .plan-add-cal,
+.plan-add-form .plan-add-protein { width: 70px; }
 .plan-add-form button {
   background: var(--accent);
   border: none;
