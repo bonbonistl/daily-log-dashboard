@@ -1,6 +1,7 @@
 const PLAN_TIME_SLOTS = ["Morning", "Midday", "Afternoon", "Evening"];
 
 let planRows = [];
+let actualLogRows = []; // today's real daily_log Food & Drink rows, for the forecast cards
 let planViewDate = todayLocalStr();
 let planLoadedOnce = false;
 
@@ -15,10 +16,18 @@ async function renderFoodPlanDeepDive() {
     document.getElementById("planPanel").classList.add("hidden");
   }
 
-  const { data, error } = await sb.from("food_plan").select("*")
-    .eq("log_date", planViewDate)
-    .order("id", { ascending: true });
+  const [planRes, logRes] = await Promise.all([
+    sb.from("food_plan").select("*")
+      .eq("log_date", planViewDate)
+      .order("id", { ascending: true }),
+    // Real journal entries for the day, so the forecast reflects what you've actually
+    // eaten (including anything logged outside the plan), not just checked-off plan items.
+    sb.from("daily_log").select("calories, protein_g, est_calories, est_protein_g, details")
+      .eq("log_date", planViewDate)
+      .eq("category", "Food & Drink"),
+  ]);
 
+  const error = planRes.error || logRes.error;
   if (error) {
     document.getElementById("planLoading").textContent = "Error loading data: " + error.message;
     document.getElementById("planLoading").classList.remove("hidden");
@@ -28,7 +37,8 @@ async function renderFoodPlanDeepDive() {
   document.getElementById("planLoading").classList.add("hidden");
   document.getElementById("planPanel").classList.remove("hidden");
   planLoadedOnce = true;
-  planRows = data;
+  planRows = planRes.data;
+  actualLogRows = logRes.data;
   renderPlan();
 }
 
@@ -81,24 +91,32 @@ function renderPlan() {
   });
 }
 
-// Hypothetical macros for the day: total = everything planned, eaten = the subset
-// already checked off. Items without an AI estimate yet just contribute 0.
+// Forecast = what you've actually eaten today (real daily_log entries, whatever their
+// source — plan check-offs or logged some other way) + whatever's still unchecked on
+// the plan. That's "where today is headed" if you follow through on what's left.
 function renderPlanCards() {
   const cardsEl = document.getElementById("planCards");
-  if (!planRows.length) { cardsEl.innerHTML = ""; return; }
+  if (!planRows.length && !actualLogRows.length) { cardsEl.innerHTML = ""; return; }
 
-  const sum = (rows, field) => rows.reduce((s, r) => s + (numOrNull(r[field]) || 0), 0);
-  const eaten = planRows.filter((r) => r.logged_daily_log_id);
-  const totalCal = sum(planRows, "est_calories");
-  const eatenCal = sum(eaten, "est_calories");
-  const totalProtein = sum(planRows, "est_protein_g");
-  const eatenProtein = sum(eaten, "est_protein_g");
-  const missing = planRows.filter((r) => r.est_calories == null).length;
-  const missingNote = missing ? ` (${missing} item${missing === 1 ? "" : "s"} missing an estimate)` : "";
+  const actualCal = actualLogRows.reduce((s, r) => s + (numOrNull(r.calories) ?? numOrNull(r.est_calories) ?? parseCalories(r.details || "") ?? 0), 0);
+  const actualProtein = actualLogRows.reduce((s, r) => s + (numOrNull(r.protein_g) ?? numOrNull(r.est_protein_g) ?? parseProteinG(r.details || "") ?? 0), 0);
+
+  const remaining = planRows.filter((r) => !r.logged_daily_log_id);
+  const remainingCal = remaining.reduce((s, r) => s + (numOrNull(r.est_calories) || 0), 0);
+  const remainingProtein = remaining.reduce((s, r) => s + (numOrNull(r.est_protein_g) || 0), 0);
+
+  const forecastCal = actualCal + remainingCal;
+  const forecastProtein = actualProtein + remainingProtein;
 
   cardsEl.innerHTML = [
-    { label: "Calories", value: `${Math.round(eatenCal)} / ${Math.round(totalCal)}`, sub: `eaten / planned today${missingNote}` },
-    { label: "Protein", value: `${Math.round(eatenProtein)}g / ${Math.round(totalProtein)}g`, sub: `eaten / planned today${missingNote}` },
+    {
+      label: "Forecasted Calories", value: `${Math.round(forecastCal)}`,
+      sub: `${Math.round(actualCal)} eaten so far + ${Math.round(remainingCal)} left on plan`,
+    },
+    {
+      label: "Forecasted Protein", value: `${Math.round(forecastProtein)}g`,
+      sub: `${Math.round(actualProtein)}g eaten so far + ${Math.round(remainingProtein)}g left on plan`,
+    },
   ].map((c) => `
     <div class="card">
       <div class="label">${c.label}</div>
