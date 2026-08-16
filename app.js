@@ -36,7 +36,7 @@ const parseWeightLbs = (t) => parseFirst(t, /(\d+(?:\.\d+)?)\s*lbs?/i);
 // the whole entry as food (covers combo entries like "carrot cake, 16 oz IPA").
 // Otherwise, if it matches a pure-beverage pattern, it's a drink.
 const FOOD_WORDS = /taco|egg|bagel|salad|chicken|pasta|pizza|sandwich|burger|\brice\b|bread|cookie|cake|chip|fries|dumpling|nacho|wrap|yogurt|salmon|steak|pork|beef|noodle|toast|burrito|\bbar\b|banana|dessert|ice cream|brownie|pretzel|hummus|guac|queso|meatball|sausage|bratwurst|orzo|broccoli|tortilla|cheese|smoothie|shake|beignet|dog\b|fingers|wings|fillet|thigh|breast|drumstick|pita|cracker|bacon|ramen|lasagna|salami/i;
-const DRINK_WORDS = /\bcoffee\b|\bespresso\b|\blatte\b|\bcappuccino\b|\btea\b|\bbeer\b|\bipa\b|\bapa\b|\blager\b|\bpilsner\b|\bale\b|\bwine\b|\bmezcal\b|\bspritz\b|\bhighball\b|red bull|\bcelsius\b|\bsoda\b|lemonade|powerade|sparkling|\bkombucha\b|\bcocktail\b|city wide/i;
+const DRINK_WORDS = /\bcoffee\b|\bespresso\b|\blatte\b|\bcappuccino\b|\btea\b|\bbeer\b|\bipa\b|\bapa\b|\blager\b|\bpilsner\b|\bale\b|\bwine\b|\bmezcal\b|\bspritz\b|\bhighball\b|red bull|\bcelsius\b|\bsoda\b|lemonade|powerade|sparkling|\bkombucha\b|\bcocktail\b|city wide|margarita|shandy/i;
 function isDrinkOnly(text) {
   const t = text || "";
   if (FOOD_WORDS.test(t)) return false;
