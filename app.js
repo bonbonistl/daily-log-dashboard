@@ -74,8 +74,9 @@ function fmtShort(dateStr) {
 }
 
 // log_time is free text and shows up in a few different formats depending on how it
-// was logged: "7:00 PM", "9:00-9:37 AM" (grab the end of the range), or bare 24-hour
-// "14:10" from some manual entries. Try 12-hour AM/PM first, then fall back to 24-hour.
+// was logged: "7:00 PM", "9:00-9:37 AM" (grab the end of the range), bare 24-hour
+// "14:10" from some manual entries, or "14:10:00" with seconds from newer integrations.
+// Try 12-hour AM/PM first, then fall back to 24-hour (with or without a seconds part).
 function parseLogTimeToDate(dateStr, timeStr) {
   if (!timeStr) return null;
   const d = new Date(dateStr + "T00:00:00");
@@ -92,9 +93,9 @@ function parseLogTimeToDate(dateStr, timeStr) {
     return d;
   }
 
-  const h24Match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+  const h24Match = timeStr.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
   if (h24Match) {
-    d.setHours(parseInt(h24Match[1], 10), parseInt(h24Match[2], 10), 0, 0);
+    d.setHours(parseInt(h24Match[1], 10), parseInt(h24Match[2], 10), parseInt(h24Match[3] || "0", 10), 0);
     return d;
   }
 
