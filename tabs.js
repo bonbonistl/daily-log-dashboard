@@ -55,3 +55,20 @@ function activateHealthSubtab(key) {
 HEALTH_SUBTABS.forEach((t) => {
   document.getElementById(t.btnId).addEventListener("click", () => activateHealthSubtab(t.key));
 });
+
+// ---------- groceries sub-tabs ----------
+const GROCERIES_SUBTABS = [
+  { key: "cart", btnId: "cartSubtabBtn", contentId: "groceriesCart" },
+  { key: "inventory", btnId: "inventorySubtabBtn", contentId: "groceriesInventory" },
+];
+
+function activateGroceriesSubtab(key) {
+  GROCERIES_SUBTABS.forEach((t) => {
+    document.getElementById(t.btnId).classList.toggle("active", t.key === key);
+    document.getElementById(t.contentId).classList.toggle("hidden", t.key !== key);
+  });
+}
+
+GROCERIES_SUBTABS.forEach((t) => {
+  document.getElementById(t.btnId).addEventListener("click", () => activateGroceriesSubtab(t.key));
+});
