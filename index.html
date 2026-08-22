@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Daily Log Dashboard</title>
+<title>LifeOS</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <link rel="stylesheet" href="style.css" />
@@ -11,7 +11,7 @@
 <body>
   <div id="authGate" class="auth-gate">
     <div class="auth-card">
-      <h1>Daily Log Dashboard</h1>
+      <h1>LifeOS</h1>
       <p>This dashboard is private. Sign in with Google to continue.</p>
       <button id="signInBtn">Sign in with Google</button>
       <p id="authStatus" class="auth-status"></p>
@@ -20,11 +20,12 @@
 
   <div id="appShell" class="hidden">
   <header>
-    <h1>Daily Log Dashboard</h1>
+    <h1>LifeOS</h1>
     <div class="tabs">
       <button class="tab-btn active" id="healthTabBtn" data-tab="health">Health</button>
       <button class="tab-btn" id="spiritualTabBtn" data-tab="spiritual">Spiritual</button>
       <button class="tab-btn" id="insightsTabBtn" data-tab="insights">Insights</button>
+      <button class="tab-btn" id="groceriesTabBtn" data-tab="groceries">Groceries</button>
     </div>
     <div class="controls" id="healthControls">
       <label>
@@ -225,6 +226,20 @@
     </section>
   </main>
 
+  <main id="groceriesApp" class="tab-content hidden">
+    <div id="groceriesLoading">Loading data…</div>
+
+    <section class="panel hidden" id="groceriesPanel">
+      <div class="panel-heading-row">
+        <h2 id="groceriesHeading">Cart</h2>
+        <span id="groceriesUpdatedAt" class="updated-at"></span>
+      </div>
+      <p class="hint drawer-hint">Shows what's in the Instacart cart as of the last sync — ask Claude to "sync my cart" to pull the latest.</p>
+      <div id="groceriesCards" class="cards"></div>
+      <div id="groceriesGroups" class="checkin-groups"></div>
+    </section>
+  </main>
+
   <div id="practicesBackdrop" class="journal-backdrop"></div>
   <aside id="practicesDrawer" class="journal-drawer">
     <div class="journal-header">
@@ -257,6 +272,7 @@
   <script src="fasting.js"></script>
   <script src="food_plan.js"></script>
   <script src="insights.js"></script>
+  <script src="groceries.js"></script>
   <script src="tabs.js"></script>
   <script src="auth.js"></script>
 </body>

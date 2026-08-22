@@ -5,10 +5,12 @@ const TOP_TABS = [
   { key: "health", btnId: "healthTabBtn", contentId: "app" },
   { key: "spiritual", btnId: "spiritualTabBtn", contentId: "spiritualApp" },
   { key: "insights", btnId: "insightsTabBtn", contentId: "insightsApp" },
+  { key: "groceries", btnId: "groceriesTabBtn", contentId: "groceriesApp" },
 ];
 
 let spiritualLoaded = false;
 let insightsLoaded = false;
+let groceriesLoaded = false;
 
 function activateTab(key) {
   TOP_TABS.forEach((t) => {
@@ -24,6 +26,10 @@ function activateTab(key) {
   if (key === "insights" && !insightsLoaded) {
     insightsLoaded = true;
     loadInsightsData();
+  }
+  if (key === "groceries" && !groceriesLoaded) {
+    groceriesLoaded = true;
+    loadGroceriesData();
   }
 }
 

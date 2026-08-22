@@ -394,6 +394,9 @@ button:hover { border-color: var(--accent); }
 }
 .plan-item-remove:hover { color: var(--danger); }
 
+/* ---------- groceries ---------- */
+.grocery-function-select { flex-shrink: 0; font-size: 12px; }
+
 .plan-add-form {
   display: flex;
   flex-wrap: wrap;
