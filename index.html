@@ -23,7 +23,7 @@
     <h1>LifeOS</h1>
     <div class="tabs">
       <button class="tab-btn active" id="healthTabBtn" data-tab="health">Health</button>
-      <button class="tab-btn" id="spiritualTabBtn" data-tab="spiritual">Spiritual</button>
+      <button class="tab-btn" id="spiritualTabBtn" data-tab="spiritual">Habits</button>
       <button class="tab-btn" id="insightsTabBtn" data-tab="insights">Insights</button>
       <button class="tab-btn" id="groceriesTabBtn" data-tab="groceries">Groceries</button>
     </div>
@@ -269,9 +269,10 @@
       <h2>Manage Practices</h2>
       <button id="practicesCloseBtn" aria-label="Close">&times;</button>
     </div>
-    <p class="hint drawer-hint">Choose which check-ins each practice shows up in. Uncheck all three to hide it without deleting its history.</p>
+    <p class="hint drawer-hint">Choose which check-ins each practice shows up in. Uncheck all four to hide it without deleting its history.</p>
     <div id="practicesList" class="practices-list"></div>
     <form id="addPracticeForm" class="add-practice-form">
+      <input type="text" id="newPracticeEmoji" class="practice-emoji-input" placeholder="🙂" maxlength="8" />
       <input type="text" id="newPracticeName" placeholder="New practice name" maxlength="80" required />
       <button type="submit">Add</button>
     </form>

@@ -1,9 +1,9 @@
-const TIMES_OF_DAY = ["Morning", "Noon", "Night"];
-const TIME_KEY = { Morning: "morning", Noon: "noon", Night: "night" };
+const TIMES_OF_DAY = ["Morning", "Mid Morning", "Noon", "Night"];
+const TIME_KEY = { Morning: "morning", "Mid Morning": "mid_morning", Noon: "noon", Night: "night" };
 const ROL_RANGE_DAYS = 14;
 
 let rolRows = [];
-let rolPractices = []; // [{id, name, morning, noon, night, sort_order}], ordered by sort_order
+let rolPractices = []; // [{id, name, emoji, morning, mid_morning, noon, night, sort_order}], ordered by sort_order
 let rolDisruptions = [];
 let allDisruptionCauses = []; // every cause ever logged, all-time — powers the reusable suggestion chips
 let spiritualLoadedOnce = false;
@@ -89,6 +89,10 @@ function findRolRow(date, time, practice) {
   return rolRows.find((r) => r.log_date === date && r.time_of_day === time && r.practice === practice);
 }
 
+function practiceLabel(p) {
+  return p.emoji ? `${p.emoji} ${p.name}` : p.name;
+}
+
 function renderCheckin() {
   const viewDate = getCheckinViewDate();
   const isToday = checkinDateOffset === 0;
@@ -106,7 +110,7 @@ function renderCheckin() {
       return `
         <label class="rol-item ${checked ? "done" : ""}" data-time="${time}" data-practice="${p.name}" data-id="${row ? row.id : ""}">
           <input type="checkbox" ${checked ? "checked" : ""} />
-          <span>${p.name}</span>
+          <span>${practiceLabel(p)}</span>
         </label>
       `;
     }).join("");
@@ -219,7 +223,7 @@ function renderRolGrid(todayStr) {
   days.forEach((d) => { html += `<div class="date-label">${fmtShort(d)}</div>`; });
 
   rolPractices.forEach((p) => {
-    html += `<div class="row-label">${p.name}</div>`;
+    html += `<div class="row-label">${practiceLabel(p)}</div>`;
     days.forEach((d) => {
       const logged = doneSet.has(`${d}|${p.name}`);
       html += `<div class="cell ${logged ? "logged" : "missing"}" title="${p.name} on ${d}: ${logged ? "done" : "not done"}"></div>`;
@@ -236,7 +240,7 @@ function renderRolBreakdown(todayStr) {
   const rows = rolPractices.map((p) => {
     const doneDays = days.filter((d) => doneSet.has(`${d}|${p.name}`)).length;
     const pct = days.length ? Math.round((doneDays / days.length) * 100) : 0;
-    return { practice: p.name, pct, doneDays, total: days.length };
+    return { practice: practiceLabel(p), pct, doneDays, total: days.length };
   });
 
   document.getElementById("rolBreakdown").innerHTML = rows.map((r) => `
@@ -355,7 +359,10 @@ function renderDisruptionList() {
 function renderPracticesList() {
   document.getElementById("practicesList").innerHTML = rolPractices.map((p) => `
     <div class="practice-row">
-      <div class="name">${p.name}</div>
+      <div class="name-row">
+        <input type="text" class="practice-emoji-input" data-id="${p.id}" value="${p.emoji || ""}" placeholder="🙂" maxlength="8" />
+        <div class="name">${p.name}</div>
+      </div>
       <div class="time-toggles">
         ${TIMES_OF_DAY.map((time) => {
           const key = TIME_KEY[time];
@@ -380,6 +387,17 @@ function renderPracticesList() {
       await loadSpiritualData();
     });
   });
+
+  document.querySelectorAll(".practice-emoji-input").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const id = input.dataset.id;
+      const emoji = input.value.trim() || null;
+      input.disabled = true;
+      const { error } = await sb.from("rule_of_life_practices").update({ emoji }).eq("id", id);
+      if (error) { alert("Failed to update: " + error.message); }
+      await loadSpiritualData();
+    });
+  });
 }
 
 function openPracticesDrawer() {
@@ -398,12 +416,15 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePract
 
 document.getElementById("addPracticeForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const emojiInput = document.getElementById("newPracticeEmoji");
   const input = document.getElementById("newPracticeName");
   const name = input.value.trim();
+  const emoji = emojiInput.value.trim() || null;
   if (!name) return;
   const sortOrder = rolPractices.length ? Math.max(...rolPractices.map((p) => p.sort_order)) + 1 : 1;
-  const { error } = await sb.from("rule_of_life_practices").insert({ name, sort_order: sortOrder });
+  const { error } = await sb.from("rule_of_life_practices").insert({ name, emoji, sort_order: sortOrder });
   if (error) { alert("Failed to add practice: " + error.message); return; }
+  emojiInput.value = "";
   input.value = "";
   await loadSpiritualData();
 });

@@ -1,15 +1,15 @@
 :root {
-  --bg: #0f1419;
-  --panel: #1a2029;
-  --panel-border: #2a3341;
-  --text: #e8edf3;
-  --muted: #8b98a9;
-  --accent: #4fd1c5;
-  --accent2: #f6ad55;
-  --accent3: #63b3ed;
-  --accent4: #fc8181;
-  --warn: #f6ad55;
-  --danger: #fc8181;
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --panel-border: #e1e6ec;
+  --text: #1a2029;
+  --muted: #64748b;
+  --accent: #0f766e;
+  --accent2: #b45309;
+  --accent3: #2563eb;
+  --accent4: #dc2626;
+  --warn: #b45309;
+  --danger: #dc2626;
 }
 
 * { box-sizing: border-box; }
@@ -122,8 +122,8 @@ button:hover { border-color: var(--accent); }
 }
 
 .gaps-list .gap-item {
-  background: rgba(246, 173, 85, 0.1);
-  border: 1px solid rgba(246, 173, 85, 0.3);
+  background: rgba(180, 83, 9, 0.1);
+  border: 1px solid rgba(180, 83, 9, 0.3);
   border-radius: 6px;
   padding: 8px 12px;
   color: var(--warn);
@@ -179,7 +179,7 @@ button:hover { border-color: var(--accent); }
   font-weight: 600;
   cursor: pointer;
 }
-#journalBtn:hover { background: rgba(79, 209, 197, 0.1); }
+#journalBtn:hover { background: rgba(15, 118, 110, 0.1); }
 
 .journal-backdrop {
   position: fixed;
@@ -295,7 +295,7 @@ button:hover { border-color: var(--accent); }
 .tab-btn.active {
   color: var(--text);
   border-color: var(--accent);
-  background: rgba(79, 209, 197, 0.08);
+  background: rgba(15, 118, 110, 0.08);
 }
 .tab-content.hidden { display: none; }
 
@@ -334,7 +334,7 @@ button:hover { border-color: var(--accent); }
 .rol-item:hover { border-color: var(--accent); }
 .rol-item.done {
   border-color: var(--accent);
-  background: rgba(79, 209, 197, 0.1);
+  background: rgba(15, 118, 110, 0.1);
 }
 .rol-item input[type="checkbox"] {
   width: 18px;
@@ -358,7 +358,7 @@ button:hover { border-color: var(--accent); }
 }
 .plan-item.done {
   border-color: var(--accent);
-  background: rgba(79, 209, 197, 0.1);
+  background: rgba(15, 118, 110, 0.1);
 }
 .plan-item label {
   display: flex;
@@ -432,7 +432,7 @@ button:hover { border-color: var(--accent); }
 .plan-add-form button {
   background: var(--accent);
   border: none;
-  color: #0f1419;
+  color: #ffffff;
   padding: 8px 16px;
   border-radius: 6px;
   font-size: 13px;
@@ -479,7 +479,7 @@ button:hover { border-color: var(--accent); }
   font-weight: 600;
   cursor: pointer;
 }
-#managePracticesBtn:hover { background: rgba(79, 209, 197, 0.1); }
+#managePracticesBtn:hover { background: rgba(15, 118, 110, 0.1); }
 
 .drawer-hint {
   font-size: 13px;
@@ -500,14 +500,32 @@ button:hover { border-color: var(--accent); }
   padding: 10px 12px;
 }
 
+.practice-row .name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .practice-row .name {
   font-size: 14px;
   color: var(--text);
-  margin-bottom: 8px;
+}
+
+.practice-emoji-input {
+  width: 40px;
+  text-align: center;
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 6px 4px;
+  border-radius: 6px;
+  font-size: 15px;
 }
 
 .practice-row .time-toggles {
   display: flex;
+  flex-wrap: wrap;
   gap: 14px;
 }
 
@@ -543,7 +561,7 @@ button:hover { border-color: var(--accent); }
 .add-practice-form button {
   background: var(--accent);
   border: none;
-  color: #0f1419;
+  color: #ffffff;
   padding: 8px 16px;
   border-radius: 6px;
   font-size: 13px;
@@ -582,7 +600,7 @@ button:hover { border-color: var(--accent); }
 .subtab-btn.active {
   color: var(--text);
   border-color: var(--accent2);
-  background: rgba(246, 173, 85, 0.08);
+  background: rgba(180, 83, 9, 0.08);
 }
 .subtab-content.hidden { display: none; }
 
@@ -624,8 +642,8 @@ button:hover { border-color: var(--accent); }
 }
 
 .fast-item.short {
-  border-color: rgba(252, 129, 129, 0.4);
-  background: rgba(252, 129, 129, 0.06);
+  border-color: rgba(220, 38, 38, 0.4);
+  background: rgba(220, 38, 38, 0.06);
 }
 
 .fast-item-header {
@@ -704,7 +722,7 @@ button:hover { border-color: var(--accent); }
 #signInBtn {
   background: var(--accent);
   border: none;
-  color: #0f1419;
+  color: #ffffff;
   padding: 10px 20px;
   border-radius: 6px;
   font-size: 14px;
@@ -802,7 +820,7 @@ button:hover { border-color: var(--accent); }
 .disruption-form-row button {
   background: var(--accent2);
   border: none;
-  color: #0f1419;
+  color: #ffffff;
   padding: 8px 16px;
   border-radius: 6px;
   font-size: 13px;
@@ -821,8 +839,8 @@ button:hover { border-color: var(--accent); }
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(246, 173, 85, 0.1);
-  border: 1px solid rgba(246, 173, 85, 0.35);
+  background: rgba(180, 83, 9, 0.1);
+  border: 1px solid rgba(180, 83, 9, 0.35);
   color: var(--accent2);
   padding: 5px 10px;
   border-radius: 999px;
