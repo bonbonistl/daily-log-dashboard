@@ -1090,6 +1090,9 @@ button:hover { border-color: var(--accent); }
   border-radius: 10px;
   margin: 0 4px 4px 0;
 }
+.job-connection-title {
+  color: var(--muted);
+}
 
 .job-company-remove {
   background: none;

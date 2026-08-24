@@ -1,7 +1,7 @@
 let businessesLoadedOnce = false;
 let businesses = []; // [{id, name, careers_url, notes, created_at}]
 let jobOpenings = []; // [{id, business_id, title, url, posted_date, status, applied_date, status_changed_at, notes, created_at}]
-let businessPeople = []; // [{id, name, business_id}] — the full CRM roster, used for the table's Contacts column and the rail's link/add-contact controls
+let businessPeople = []; // [{id, name, title, business_id}] — the full CRM roster, used for the table's Contacts column and the rail's link/add-contact controls
 let openBusinessId = null; // id of the business currently shown in the side rail, or null if closed
 
 const JOB_STATUSES = [
@@ -27,7 +27,7 @@ async function loadBusinessesData() {
   const fetchPromise = Promise.all([
     sb.from("businesses").select("*").order("name", { ascending: true }),
     sb.from("job_openings").select("*").order("created_at", { ascending: false }),
-    sb.from("people").select("id, name, business_id").order("name", { ascending: true }),
+    sb.from("people").select("id, name, title, business_id").order("name", { ascending: true }),
   ]);
 
   let businessesRes, openingsRes, peopleRes;
@@ -165,7 +165,7 @@ function renderBusinessesTable() {
     const contacts = businessPeople.filter((p) => p.business_id === b.id);
 
     const contactsCell = contacts.length
-      ? contacts.map((p) => `<span class="job-connection-badge">🤝 ${p.name}</span>`).join(" ")
+      ? contacts.map((p) => `<span class="job-connection-badge">🤝 ${p.name}${p.title ? ` <span class="job-connection-title">— ${p.title}</span>` : ""}</span>`).join(" ")
       : `<span class="job-table-empty">—</span>`;
 
     const careersCell = b.careers_url
@@ -400,7 +400,7 @@ function renderBusinessContacts() {
   listEl.innerHTML = linked.length
     ? `<div class="rol-checklist">${linked.map((p) => `
         <div class="plan-item" data-person-id="${p.id}">
-          <label><span>${p.name}</span></label>
+          <label><span>${p.name}${p.title ? `<span class="plan-item-macro">${p.title}</span>` : ""}</span></label>
           <button type="button" class="plan-item-remove" title="Unlink from this business">&times;</button>
         </div>
       `).join("")}</div>`
@@ -420,7 +420,8 @@ function personLinkSelectHtml() {
     `<option value="">Select a person…</option>`,
     ...eligible.map((p) => {
       const currentBiz = p.business_id ? businesses.find((b) => b.id === p.business_id) : null;
-      return `<option value="${p.id}">${p.name}${currentBiz ? ` (currently at ${currentBiz.name})` : ""}</option>`;
+      const titlePart = p.title ? ` — ${p.title}` : "";
+      return `<option value="${p.id}">${p.name}${titlePart}${currentBiz ? ` (currently at ${currentBiz.name})` : ""}</option>`;
     }),
   ].join("");
 }
