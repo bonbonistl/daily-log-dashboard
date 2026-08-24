@@ -1,5 +1,5 @@
 let crmLoadedOnce = false;
-let people = []; // [{id, name, title, linkedin_url, instagram_url, email, phone, city, state, country, birthday, business_id, created_at}]
+let people = []; // [{id, name, title, linkedin_url, instagram_url, email, phone, city, state, country, birthday, business_id, created_at}] — birthday is free text (e.g. "8/24"), not a date column, since the year is often unknown
 let crmBusinesses = []; // [{id, name}] — lightweight, just for the business select + display
 let openPersonId = null; // id of the person currently shown in the side rail, or null if closed
 
@@ -77,7 +77,7 @@ function renderPeopleTable() {
         </td>
         <td>${businessName ? businessName : `<span class="job-table-empty">—</span>`}</td>
         <td>${location || `<span class="job-table-empty">—</span>`}</td>
-        <td>${p.birthday ? fmtShort(p.birthday) : `<span class="job-table-empty">—</span>`}</td>
+        <td>${p.birthday || `<span class="job-table-empty">—</span>`}</td>
         <td>${links || `<span class="job-table-empty">—</span>`}</td>
         <td class="job-table-actions"><button type="button" class="job-company-remove" title="Remove person">&times;</button></td>
       </tr>
@@ -167,7 +167,7 @@ document.getElementById("personDetailsForm").addEventListener("submit", async (e
     city: document.getElementById("personCity").value.trim() || null,
     state: document.getElementById("personState").value.trim() || null,
     country: document.getElementById("personCountry").value.trim() || null,
-    birthday: document.getElementById("personBirthday").value || null,
+    birthday: document.getElementById("personBirthday").value.trim() || null,
   };
 
   const { error } = await sb.from("people").update(update).eq("id", openPersonId);
