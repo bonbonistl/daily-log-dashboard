@@ -26,7 +26,8 @@
       <button class="tab-btn" id="spiritualTabBtn" data-tab="spiritual">Habits</button>
       <button class="tab-btn" id="insightsTabBtn" data-tab="insights">Insights</button>
       <button class="tab-btn" id="groceriesTabBtn" data-tab="groceries">Groceries</button>
-      <button class="tab-btn" id="jobMarketTabBtn" data-tab="jobMarket">Job Market</button>
+      <button class="tab-btn" id="businessesTabBtn" data-tab="businesses">Businesses</button>
+      <button class="tab-btn" id="crmTabBtn" data-tab="crm">CRM</button>
     </div>
     <div class="controls" id="healthControls">
       <label>
@@ -264,64 +265,127 @@
     </div>
   </main>
 
-  <main id="jobMarketApp" class="tab-content hidden">
-    <div id="jobMarketLoading">Loading data…</div>
+  <main id="businessesApp" class="tab-content hidden">
+    <div id="businessesLoading">Loading data…</div>
 
-    <section class="panel hidden" id="jobMarketPanel">
+    <section class="panel hidden" id="businessesPanel">
       <div class="panel-heading-row">
-        <h2>Job Market</h2>
-        <span id="jobMarketUpdatedAt" class="updated-at"></span>
+        <h2>Businesses</h2>
+        <span id="businessesUpdatedAt" class="updated-at"></span>
       </div>
-      <p class="hint drawer-hint">Track companies you're watching, who you know there, and every opening's status through the pipeline.</p>
+      <p class="hint drawer-hint">Track companies you're watching and every opening's status through the pipeline. Manage the people you know there from the CRM tab.</p>
 
-      <section id="jobMarketCards" class="cards"></section>
+      <section id="businessesCards" class="cards"></section>
 
-      <form id="addCompanyForm" class="plan-add-form">
-        <input type="text" id="newCompanyName" placeholder="Company name" maxlength="200" required />
-        <button type="submit">Add Company</button>
+      <form id="addBusinessForm" class="plan-add-form">
+        <input type="text" id="newBusinessName" placeholder="Business name" maxlength="200" required />
+        <button type="submit">Add Business</button>
       </form>
-      <p class="hint drawer-hint">Click a company name to add a careers link and your contact there.</p>
+      <p class="hint drawer-hint">Click a business name to add a careers link and notes.</p>
 
-      <table class="job-companies-table">
+      <table class="data-table">
         <thead>
           <tr>
-            <th>Company</th>
+            <th>Business</th>
             <th>Contacts</th>
             <th>Careers</th>
             <th>Openings</th>
             <th></th>
           </tr>
         </thead>
-        <tbody id="jobCompaniesTableBody"></tbody>
+        <tbody id="businessesTableBody"></tbody>
       </table>
     </section>
   </main>
 
-  <div id="companyBackdrop" class="journal-backdrop"></div>
-  <aside id="companyDrawer" class="journal-drawer">
+  <div id="businessBackdrop" class="journal-backdrop"></div>
+  <aside id="businessDrawer" class="journal-drawer">
     <div class="journal-header">
-      <h2 id="companyDrawerTitle">Company</h2>
-      <button id="companyDrawerCloseBtn" aria-label="Close">&times;</button>
+      <h2 id="businessDrawerTitle">Business</h2>
+      <button id="businessDrawerCloseBtn" aria-label="Close">&times;</button>
     </div>
-    <form id="companyDetailsForm" class="company-detail-form">
+    <form id="businessDetailsForm" class="detail-form">
       <label>Careers page URL
-        <input type="url" id="companyCareersUrl" placeholder="https://linkedin.com/company/.../jobs" maxlength="500" />
+        <input type="url" id="businessCareersUrl" placeholder="https://linkedin.com/company/.../jobs" maxlength="500" />
       </label>
       <label>Notes
-        <textarea id="companyGeneralNotes" rows="3" placeholder="Anything else worth remembering"></textarea>
+        <textarea id="businessGeneralNotes" rows="3" placeholder="Anything else worth remembering"></textarea>
       </label>
       <button type="submit">Save</button>
     </form>
+  </aside>
 
-    <div class="company-contacts-section">
-      <h3>Contacts</h3>
-      <p class="hint drawer-hint">People you know at this company. Add a name, then fill in the rest — every field saves as you leave it.</p>
-      <div id="companyContactsList" class="job-contacts-list"></div>
-      <form id="addContactForm" class="add-contact-form">
-        <input type="text" id="newContactName" placeholder="Contact name" maxlength="200" required />
-        <button type="submit">Add Contact</button>
+  <main id="crmApp" class="tab-content hidden">
+    <div id="crmLoading">Loading data…</div>
+
+    <section class="panel hidden" id="crmPanel">
+      <div class="panel-heading-row">
+        <h2>CRM</h2>
+        <span id="crmUpdatedAt" class="updated-at"></span>
+      </div>
+      <p class="hint drawer-hint">People you know — optionally tied to a business, but not required to be.</p>
+
+      <form id="addPersonForm" class="plan-add-form">
+        <input type="text" id="newPersonName" placeholder="Person's name" maxlength="200" required />
+        <button type="submit">Add Person</button>
       </form>
+      <p class="hint drawer-hint">Click a name to fill in their business, contact info, location, and birthday.</p>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Business</th>
+            <th>Location</th>
+            <th>Birthday</th>
+            <th>Links</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="peopleTableBody"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <div id="personBackdrop" class="journal-backdrop"></div>
+  <aside id="personDrawer" class="journal-drawer">
+    <div class="journal-header">
+      <h2 id="personDrawerTitle">Person</h2>
+      <button id="personDrawerCloseBtn" aria-label="Close">&times;</button>
     </div>
+    <form id="personDetailsForm" class="detail-form">
+      <label>Business
+        <select id="personBusiness"></select>
+      </label>
+      <label>Title
+        <input type="text" id="personTitle" placeholder="e.g. Engineering Manager" maxlength="200" />
+      </label>
+      <label>LinkedIn
+        <input type="url" id="personLinkedin" placeholder="https://linkedin.com/in/..." maxlength="500" />
+      </label>
+      <label>Instagram
+        <input type="url" id="personInstagram" placeholder="https://instagram.com/..." maxlength="500" />
+      </label>
+      <label>Email
+        <input type="email" id="personEmail" placeholder="name@example.com" maxlength="200" />
+      </label>
+      <label>Phone
+        <input type="tel" id="personPhone" placeholder="(555) 555-5555" maxlength="50" />
+      </label>
+      <label>City
+        <input type="text" id="personCity" maxlength="100" />
+      </label>
+      <label>State
+        <input type="text" id="personState" maxlength="100" />
+      </label>
+      <label>Country
+        <input type="text" id="personCountry" maxlength="100" />
+      </label>
+      <label>Birthday
+        <input type="date" id="personBirthday" />
+      </label>
+      <button type="submit">Save</button>
+    </form>
   </aside>
 
   <div id="practicesBackdrop" class="journal-backdrop"></div>
@@ -358,7 +422,8 @@
   <script src="food_plan.js"></script>
   <script src="insights.js"></script>
   <script src="groceries.js"></script>
-  <script src="job_market.js"></script>
+  <script src="businesses.js"></script>
+  <script src="crm.js"></script>
   <script src="tabs.js"></script>
   <script src="auth.js"></script>
 </body>

@@ -942,7 +942,7 @@ button:hover { border-color: var(--accent); }
   font-style: italic;
 }
 
-/* ---------- job market ---------- */
+/* ---------- businesses & CRM ---------- */
 .job-company-name-btn {
   background: none;
   border: none;
@@ -963,20 +963,20 @@ button:hover { border-color: var(--accent); }
   color: var(--accent3);
 }
 
-.company-detail-form {
+.detail-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.company-detail-form label {
+.detail-form label {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
   color: var(--muted);
 }
-.company-detail-form input,
-.company-detail-form textarea {
+.detail-form input,
+.detail-form textarea {
   background: var(--bg);
   border: 1px solid var(--panel-border);
   color: var(--text);
@@ -985,8 +985,8 @@ button:hover { border-color: var(--accent); }
   font-size: 13px;
   font-family: inherit;
 }
-.company-detail-form textarea { resize: vertical; }
-.company-detail-form h3 {
+.detail-form textarea { resize: vertical; }
+.detail-form h3 {
   margin: 8px 0 0 0;
   font-size: 13px;
   color: var(--muted);
@@ -995,7 +995,7 @@ button:hover { border-color: var(--accent); }
   border-top: 1px solid var(--panel-border);
   padding-top: 14px;
 }
-.company-detail-form button[type="submit"] {
+.detail-form button[type="submit"] {
   background: var(--accent);
   border: none;
   color: #ffffff;
@@ -1007,13 +1007,13 @@ button:hover { border-color: var(--accent); }
   margin-top: 4px;
 }
 
-.job-companies-table {
+.data-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 18px;
   font-size: 13px;
 }
-.job-companies-table th {
+.data-table th {
   text-align: left;
   font-size: 11px;
   color: var(--muted);
@@ -1022,13 +1022,13 @@ button:hover { border-color: var(--accent); }
   padding: 0 10px 8px 10px;
   border-bottom: 1px solid var(--panel-border);
 }
-.job-companies-table td {
+.data-table td {
   vertical-align: top;
   padding: 12px 10px;
   border-bottom: 1px solid var(--panel-border);
 }
-.job-companies-table tbody tr:hover { background: rgba(15, 118, 110, 0.04); }
-.job-companies-table td.journal-empty { text-align: center; padding: 20px 10px; }
+.data-table tbody tr:hover { background: rgba(15, 118, 110, 0.04); }
+.data-table td.journal-empty { text-align: center; padding: 20px 10px; }
 
 .job-table-empty { color: var(--muted); font-size: 12px; }
 .job-table-actions { text-align: right; white-space: nowrap; }
@@ -1152,83 +1152,8 @@ button:hover { border-color: var(--accent); }
   cursor: pointer;
 }
 
-/* ---------- job market: contact rail ---------- */
-.company-contacts-section {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--panel-border);
-}
-.company-contacts-section h3 {
-  margin: 0 0 4px 0;
-  font-size: 13px;
+.job-table-sub {
+  font-size: 12px;
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.job-contacts-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 12px 0;
-}
-
-.job-contact-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  padding: 10px;
-}
-.job-contact-card-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.job-contact-card-header .job-contact-field { flex: 1; font-weight: 600; }
-
-.job-contact-field {
-  background: var(--bg);
-  border: 1px solid var(--panel-border);
-  color: var(--text);
-  padding: 7px 9px;
-  border-radius: 6px;
-  font-size: 13px;
-}
-
-.job-contact-remove {
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  padding: 2px 4px;
-  flex-shrink: 0;
-}
-.job-contact-remove:hover { color: var(--danger); }
-
-.add-contact-form {
-  display: flex;
-  gap: 8px;
-}
-.add-contact-form input {
-  flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--panel-border);
-  color: var(--text);
-  padding: 8px 10px;
-  border-radius: 6px;
-  font-size: 13px;
-}
-.add-contact-form button {
-  background: var(--accent);
-  border: none;
-  color: #ffffff;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
+  margin-top: 2px;
 }
