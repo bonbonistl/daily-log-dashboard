@@ -1007,6 +1007,20 @@ button:hover { border-color: var(--accent); }
   margin-top: 4px;
 }
 
+.detail-form-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--panel-border);
+}
+.detail-form-section h3 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.detail-form-section .plan-add-form { margin-top: 10px; }
+
 .data-table {
   width: 100%;
   border-collapse: collapse;

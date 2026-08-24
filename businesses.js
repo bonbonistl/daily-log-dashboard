@@ -1,7 +1,7 @@
 let businessesLoadedOnce = false;
 let businesses = []; // [{id, name, careers_url, notes, created_at}]
 let jobOpenings = []; // [{id, business_id, title, url, posted_date, status, applied_date, status_changed_at, notes, created_at}]
-let businessPeople = []; // [{id, name, business_id}] — read-only display of CRM contacts; manage them from the CRM tab
+let businessPeople = []; // [{id, name, business_id}] — the full CRM roster, used for the table's Contacts column and the rail's link/add-contact controls
 let openBusinessId = null; // id of the business currently shown in the side rail, or null if closed
 
 const JOB_STATUSES = [
@@ -27,7 +27,7 @@ async function loadBusinessesData() {
   const fetchPromise = Promise.all([
     sb.from("businesses").select("*").order("name", { ascending: true }),
     sb.from("job_openings").select("*").order("created_at", { ascending: false }),
-    sb.from("people").select("id, name, business_id").not("business_id", "is", null),
+    sb.from("people").select("id, name, business_id").order("name", { ascending: true }),
   ]);
 
   let businessesRes, openingsRes, peopleRes;
@@ -256,6 +256,8 @@ function openBusinessDrawer(businessId) {
   document.getElementById("businessCareersUrl").value = business.careers_url || "";
   document.getElementById("businessGeneralNotes").value = business.notes || "";
 
+  renderBusinessContacts();
+
   document.getElementById("businessDrawer").classList.add("open");
   document.getElementById("businessBackdrop").classList.add("open");
 }
@@ -282,4 +284,70 @@ document.getElementById("businessDetailsForm").addEventListener("submit", async 
   const { error } = await sb.from("businesses").update(update).eq("id", openBusinessId);
   if (error) { alert("Failed to save business details: " + error.message); return; }
   await loadBusinessesData();
+});
+
+// ---------- business detail rail: contacts ----------
+function renderBusinessContacts() {
+  const listEl = document.getElementById("businessContactsList");
+  if (openBusinessId == null) { listEl.innerHTML = ""; return; }
+
+  const linked = businessPeople.filter((p) => p.business_id === openBusinessId);
+  listEl.innerHTML = linked.length
+    ? `<div class="rol-checklist">${linked.map((p) => `
+        <div class="plan-item" data-person-id="${p.id}">
+          <label><span>${p.name}</span></label>
+          <button type="button" class="plan-item-remove" title="Unlink from this business">&times;</button>
+        </div>
+      `).join("")}</div>`
+    : `<div class="journal-empty">No contacts linked yet.</div>`;
+
+  document.getElementById("businessLinkPersonSelect").innerHTML = personLinkSelectHtml();
+
+  document.querySelectorAll("#businessContactsList .plan-item-remove").forEach((btn) => {
+    btn.addEventListener("click", () => unlinkPersonFromBusiness(btn.closest("[data-person-id]").dataset.personId));
+  });
+}
+
+function personLinkSelectHtml() {
+  const eligible = businessPeople.filter((p) => p.business_id !== openBusinessId);
+  if (!eligible.length) return `<option value="">No other people in CRM yet</option>`;
+  return [
+    `<option value="">Select a person…</option>`,
+    ...eligible.map((p) => {
+      const currentBiz = p.business_id ? businesses.find((b) => b.id === p.business_id) : null;
+      return `<option value="${p.id}">${p.name}${currentBiz ? ` (currently at ${currentBiz.name})` : ""}</option>`;
+    }),
+  ].join("");
+}
+
+document.getElementById("businessLinkPersonBtn").addEventListener("click", async () => {
+  const select = document.getElementById("businessLinkPersonSelect");
+  const personId = select.value;
+  if (!personId || openBusinessId == null) return;
+
+  const { error } = await sb.from("people").update({ business_id: openBusinessId }).eq("id", personId);
+  if (error) { alert("Failed to link person: " + error.message); return; }
+  await loadBusinessesData();
+  renderBusinessContacts();
+});
+
+async function unlinkPersonFromBusiness(personId) {
+  const { error } = await sb.from("people").update({ business_id: null }).eq("id", personId);
+  if (error) { alert("Failed to unlink person: " + error.message); return; }
+  await loadBusinessesData();
+  renderBusinessContacts();
+}
+
+document.getElementById("businessNewContactForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (openBusinessId == null) return;
+  const nameInput = document.getElementById("businessNewContactName");
+  const name = nameInput.value.trim();
+  if (!name) return;
+
+  const { error } = await sb.from("people").insert({ name, business_id: openBusinessId });
+  if (error) { alert("Failed to add contact: " + error.message); return; }
+  nameInput.value = "";
+  await loadBusinessesData();
+  renderBusinessContacts();
 });
