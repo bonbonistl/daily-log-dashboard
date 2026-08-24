@@ -278,14 +278,48 @@
 
       <form id="addCompanyForm" class="plan-add-form">
         <input type="text" id="newCompanyName" placeholder="Company name" maxlength="200" required />
-        <label class="job-connection-check"><input type="checkbox" id="newCompanyConnection" /> Know someone there</label>
-        <input type="text" id="newCompanyConnectionNotes" placeholder="Who? (optional)" maxlength="200" />
         <button type="submit">Add Company</button>
       </form>
+      <p class="hint drawer-hint">Click a company name to add a careers link and your contact there.</p>
 
       <div id="jobCompaniesList" class="job-companies-list"></div>
     </section>
   </main>
+
+  <div id="companyBackdrop" class="journal-backdrop"></div>
+  <aside id="companyDrawer" class="journal-drawer">
+    <div class="journal-header">
+      <h2 id="companyDrawerTitle">Company</h2>
+      <button id="companyDrawerCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <form id="companyDetailsForm" class="company-detail-form">
+      <label>Careers page URL
+        <input type="url" id="companyCareersUrl" placeholder="https://linkedin.com/company/.../jobs" maxlength="500" />
+      </label>
+      <label>Notes
+        <textarea id="companyGeneralNotes" rows="3" placeholder="Anything else worth remembering"></textarea>
+      </label>
+
+      <h3>My Contact</h3>
+      <label>Name
+        <input type="text" id="companyContactName" placeholder="Full name" maxlength="200" />
+      </label>
+      <label>Title
+        <input type="text" id="companyContactTitle" placeholder="e.g. Engineering Manager" maxlength="200" />
+      </label>
+      <label>LinkedIn
+        <input type="url" id="companyContactLinkedin" placeholder="https://linkedin.com/in/..." maxlength="500" />
+      </label>
+      <label>Email
+        <input type="email" id="companyContactEmail" placeholder="name@company.com" maxlength="200" />
+      </label>
+      <label>Phone
+        <input type="tel" id="companyContactPhone" placeholder="(555) 555-5555" maxlength="50" />
+      </label>
+
+      <button type="submit">Save</button>
+    </form>
+  </aside>
 
   <div id="practicesBackdrop" class="journal-backdrop"></div>
   <aside id="practicesDrawer" class="journal-drawer">

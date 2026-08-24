@@ -1,6 +1,7 @@
 let jobMarketLoadedOnce = false;
-let jobCompanies = []; // [{id, name, has_connection, connection_notes, notes, created_at}]
+let jobCompanies = []; // [{id, name, careers_url, notes, contact_name, contact_title, contact_linkedin_url, contact_email, contact_phone, created_at}]
 let jobOpenings = []; // [{id, company_id, title, url, posted_date, status, applied_date, status_changed_at, notes, created_at}]
+let openCompanyId = null; // id of the company currently shown in the side rail, or null if closed
 
 const JOB_STATUSES = [
   { key: "watching", label: "Watching" },
@@ -92,7 +93,11 @@ function renderJobCompanies() {
     return `
       <div class="job-company" data-company-id="${c.id}">
         <div class="job-company-header">
-          <h3>${c.name}${c.has_connection ? `<span class="job-connection-badge" title="${c.connection_notes ? c.connection_notes.replace(/"/g, "&quot;") : "Know someone here"}">🤝 ${c.connection_notes || "knows someone"}</span>` : ""}</h3>
+          <h3>
+            <button type="button" class="job-company-name-btn">${c.name}</button>
+            ${c.contact_name ? `<span class="job-connection-badge" title="${c.contact_title ? c.contact_title.replace(/"/g, "&quot;") : "Your contact here"}">🤝 ${c.contact_name}</span>` : ""}
+            ${c.careers_url ? `<a class="job-careers-link" href="${c.careers_url}" target="_blank" rel="noopener noreferrer">Careers ↗</a>` : ""}
+          </h3>
           <button type="button" class="job-company-remove" title="Remove company">&times;</button>
         </div>
         ${c.notes ? `<div class="job-company-notes">${c.notes}</div>` : ""}
@@ -134,6 +139,9 @@ function renderJobOpening(o) {
 }
 
 function bindJobCompanyEvents() {
+  document.querySelectorAll(".job-company-name-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openCompanyDrawer(btn.closest("[data-company-id]").dataset.companyId));
+  });
   document.querySelectorAll(".job-company-remove").forEach((btn) => {
     btn.addEventListener("click", () => removeJobCompany(btn));
   });
@@ -152,21 +160,13 @@ function bindJobCompanyEvents() {
 document.getElementById("addCompanyForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const nameInput = document.getElementById("newCompanyName");
-  const connectionInput = document.getElementById("newCompanyConnection");
-  const connectionNotesInput = document.getElementById("newCompanyConnectionNotes");
   const name = nameInput.value.trim();
   if (!name) return;
 
-  const { error } = await sb.from("job_companies").insert({
-    name,
-    has_connection: connectionInput.checked,
-    connection_notes: connectionNotesInput.value.trim() || null,
-  });
+  const { error } = await sb.from("job_companies").insert({ name });
   if (error) { alert("Failed to add company: " + error.message); return; }
 
   nameInput.value = "";
-  connectionInput.checked = false;
-  connectionNotesInput.value = "";
   await loadJobMarketData();
 });
 
@@ -231,3 +231,51 @@ async function removeJobOpening(btn) {
   if (error) { alert("Failed to remove opening: " + error.message); return; }
   await loadJobMarketData();
 }
+
+// ---------- company detail rail ----------
+function openCompanyDrawer(companyId) {
+  const company = jobCompanies.find((c) => String(c.id) === String(companyId));
+  if (!company) return;
+  openCompanyId = company.id;
+
+  document.getElementById("companyDrawerTitle").textContent = company.name;
+  document.getElementById("companyCareersUrl").value = company.careers_url || "";
+  document.getElementById("companyGeneralNotes").value = company.notes || "";
+  document.getElementById("companyContactName").value = company.contact_name || "";
+  document.getElementById("companyContactTitle").value = company.contact_title || "";
+  document.getElementById("companyContactLinkedin").value = company.contact_linkedin_url || "";
+  document.getElementById("companyContactEmail").value = company.contact_email || "";
+  document.getElementById("companyContactPhone").value = company.contact_phone || "";
+
+  document.getElementById("companyDrawer").classList.add("open");
+  document.getElementById("companyBackdrop").classList.add("open");
+}
+
+function closeCompanyDrawer() {
+  openCompanyId = null;
+  document.getElementById("companyDrawer").classList.remove("open");
+  document.getElementById("companyBackdrop").classList.remove("open");
+}
+
+document.getElementById("companyDrawerCloseBtn").addEventListener("click", closeCompanyDrawer);
+document.getElementById("companyBackdrop").addEventListener("click", closeCompanyDrawer);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openCompanyId != null) closeCompanyDrawer(); });
+
+document.getElementById("companyDetailsForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (openCompanyId == null) return;
+
+  const update = {
+    careers_url: document.getElementById("companyCareersUrl").value.trim() || null,
+    notes: document.getElementById("companyGeneralNotes").value.trim() || null,
+    contact_name: document.getElementById("companyContactName").value.trim() || null,
+    contact_title: document.getElementById("companyContactTitle").value.trim() || null,
+    contact_linkedin_url: document.getElementById("companyContactLinkedin").value.trim() || null,
+    contact_email: document.getElementById("companyContactEmail").value.trim() || null,
+    contact_phone: document.getElementById("companyContactPhone").value.trim() || null,
+  };
+
+  const { error } = await sb.from("job_companies").update(update).eq("id", openCompanyId);
+  if (error) { alert("Failed to save company details: " + error.message); return; }
+  await loadJobMarketData();
+});
