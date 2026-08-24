@@ -53,15 +53,82 @@ function businessNameFor(businessId) {
   return b ? b.name : null;
 }
 
+// ---------- people table: sort + filter ----------
+const PEOPLE_SORT_HEADERS = [
+  { id: "peopleSortName", key: "name" },
+  { id: "peopleSortBusiness", key: "business" },
+  { id: "peopleSortLocation", key: "location" },
+  { id: "peopleSortBirthday", key: "birthday" },
+  { id: "peopleSortLinks", key: "links" },
+];
+let peopleSortKey = "name";
+let peopleSortDir = 1;
+
+// Empty values sort after real ones regardless of direction toggling, by
+// pushing them past every real string ("￿" sorts after any normal text).
+const NULLS_LAST = "￿";
+
+const PEOPLE_SORT_VALUE = {
+  name: (p) => p.name.toLowerCase(),
+  business: (p) => (businessNameFor(p.business_id) || NULLS_LAST).toLowerCase(),
+  location: (p) => ([p.city, p.state, p.country].filter(Boolean).join(", ") || NULLS_LAST).toLowerCase(),
+  birthday: (p) => (p.birthday || NULLS_LAST).toLowerCase(),
+  links: (p) => (p.linkedin_url ? 1 : 0) + (p.instagram_url ? 1 : 0),
+};
+
+function getVisiblePeople() {
+  const filterText = document.getElementById("peopleFilterInput").value.trim().toLowerCase();
+
+  const filtered = !filterText ? people : people.filter((p) => {
+    const businessName = businessNameFor(p.business_id) || "";
+    const location = [p.city, p.state, p.country].filter(Boolean).join(", ");
+    const haystack = `${p.name} ${businessName} ${p.title || ""} ${location}`.toLowerCase();
+    return haystack.includes(filterText);
+  });
+
+  const valueFn = PEOPLE_SORT_VALUE[peopleSortKey];
+  return filtered.sort((a, b) => {
+    const av = valueFn(a);
+    const bv = valueFn(b);
+    if (av < bv) return -1 * peopleSortDir;
+    if (av > bv) return peopleSortDir;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function updatePeopleSortIndicators() {
+  PEOPLE_SORT_HEADERS.forEach(({ id, key }) => {
+    document.getElementById(id + "Indicator").textContent =
+      key === peopleSortKey ? (peopleSortDir === 1 ? " ▲" : " ▼") : "";
+  });
+}
+
+PEOPLE_SORT_HEADERS.forEach(({ id, key }) => {
+  document.getElementById(id).addEventListener("click", () => {
+    if (peopleSortKey === key) { peopleSortDir *= -1; } else { peopleSortKey = key; peopleSortDir = 1; }
+    renderPeopleTable();
+  });
+});
+
+document.getElementById("peopleFilterInput").addEventListener("input", () => renderPeopleTable());
+
 // ---------- people table ----------
 function renderPeopleTable() {
   const bodyEl = document.getElementById("peopleTableBody");
+  updatePeopleSortIndicators();
+
   if (!people.length) {
     bodyEl.innerHTML = `<tr><td colspan="6" class="journal-empty">No people tracked yet — add one above.</td></tr>`;
     return;
   }
 
-  bodyEl.innerHTML = people.map((p) => {
+  const visible = getVisiblePeople();
+  if (!visible.length) {
+    bodyEl.innerHTML = `<tr><td colspan="6" class="journal-empty">No people match your filter.</td></tr>`;
+    return;
+  }
+
+  bodyEl.innerHTML = visible.map((p) => {
     const businessName = businessNameFor(p.business_id);
     const location = [p.city, p.state, p.country].filter(Boolean).join(", ");
     const links = [

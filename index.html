@@ -283,14 +283,19 @@
       </form>
       <p class="hint drawer-hint">Click a business name to add a careers link and notes.</p>
 
+      <div class="table-filter-row">
+        <input type="text" id="businessFilterInput" placeholder="Filter by name, contact, or careers link…" />
+        <label class="table-filter-checkbox"><input type="checkbox" id="businessPmfOnlyFilter" /> PMF only</label>
+      </div>
+
       <table class="data-table">
         <thead>
           <tr>
-            <th>Business</th>
-            <th title="Product Market Fit — you'd be a good fit there">PMF</th>
-            <th>Contacts</th>
-            <th>Careers</th>
-            <th>Openings</th>
+            <th id="businessSortName" class="sortable-th">Business<span class="sort-indicator" id="businessSortNameIndicator"></span></th>
+            <th id="businessSortPmf" class="sortable-th" title="Product Market Fit — you'd be a good fit there">PMF<span class="sort-indicator" id="businessSortPmfIndicator"></span></th>
+            <th id="businessSortContacts" class="sortable-th">Contacts<span class="sort-indicator" id="businessSortContactsIndicator"></span></th>
+            <th id="businessSortCareers" class="sortable-th">Careers<span class="sort-indicator" id="businessSortCareersIndicator"></span></th>
+            <th id="businessSortOpenings" class="sortable-th">Openings<span class="sort-indicator" id="businessSortOpeningsIndicator"></span></th>
             <th></th>
           </tr>
         </thead>
@@ -345,14 +350,18 @@
       </form>
       <p class="hint drawer-hint">Click a name to fill in their business, contact info, location, and birthday.</p>
 
+      <div class="table-filter-row">
+        <input type="text" id="peopleFilterInput" placeholder="Filter by name, business, title, or location…" />
+      </div>
+
       <table class="data-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Business</th>
-            <th>Location</th>
-            <th>Birthday</th>
-            <th>Links</th>
+            <th id="peopleSortName" class="sortable-th">Name<span class="sort-indicator" id="peopleSortNameIndicator"></span></th>
+            <th id="peopleSortBusiness" class="sortable-th">Business<span class="sort-indicator" id="peopleSortBusinessIndicator"></span></th>
+            <th id="peopleSortLocation" class="sortable-th">Location<span class="sort-indicator" id="peopleSortLocationIndicator"></span></th>
+            <th id="peopleSortBirthday" class="sortable-th">Birthday<span class="sort-indicator" id="peopleSortBirthdayIndicator"></span></th>
+            <th id="peopleSortLinks" class="sortable-th">Links<span class="sort-indicator" id="peopleSortLinksIndicator"></span></th>
             <th></th>
           </tr>
         </thead>

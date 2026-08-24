@@ -16,6 +16,11 @@ let groceriesLoaded = false;
 let businessesLoaded = false;
 let crmLoaded = false;
 
+// Which subtab is current within a top tab that has subtabs — tracked so the
+// hash can be rebuilt (e.g. "#groceries/inventory") whenever either level changes.
+let currentHealthSubtab = "overview";
+let currentGroceriesSubtab = "cart";
+
 function activateTab(key) {
   TOP_TABS.forEach((t) => {
     document.getElementById(t.btnId).classList.toggle("active", t.key === key);
@@ -43,6 +48,8 @@ function activateTab(key) {
     crmLoaded = true;
     loadCrmData();
   }
+
+  updateUrlHash();
 }
 
 TOP_TABS.forEach((t) => {
@@ -62,6 +69,8 @@ function activateHealthSubtab(key) {
     document.getElementById(t.btnId).classList.toggle("active", t.key === key);
     document.getElementById(t.contentId).classList.toggle("hidden", t.key !== key);
   });
+  currentHealthSubtab = key;
+  updateUrlHash();
 }
 
 HEALTH_SUBTABS.forEach((t) => {
@@ -79,8 +88,46 @@ function activateGroceriesSubtab(key) {
     document.getElementById(t.btnId).classList.toggle("active", t.key === key);
     document.getElementById(t.contentId).classList.toggle("hidden", t.key !== key);
   });
+  currentGroceriesSubtab = key;
+  updateUrlHash();
 }
 
 GROCERIES_SUBTABS.forEach((t) => {
   document.getElementById(t.btnId).addEventListener("click", () => activateGroceriesSubtab(t.key));
 });
+
+// ---------- URL routing ----------
+// Hash-based (not the History API's pushState) since the app is served as a
+// static file with no server-side route fallback — a real path like /crm
+// would 404 on refresh, but a hash always resolves to the same index.html.
+function updateUrlHash() {
+  const activeTop = TOP_TABS.find((t) => document.getElementById(t.btnId).classList.contains("active"));
+  if (!activeTop) return;
+  const sub = activeTop.key === "health" ? currentHealthSubtab : activeTop.key === "groceries" ? currentGroceriesSubtab : null;
+  const next = "#" + (sub ? `${activeTop.key}/${sub}` : activeTop.key);
+  if (location.hash !== next) history.replaceState(null, "", next);
+}
+
+// Reads the current hash and activates the tab/subtab it names, falling back
+// to Health/Overview for anything empty or unrecognized. Only called once
+// signed in — calling it earlier would fire each tab's lazy data load before
+// there's a session, permanently tripping its "already loaded" guard on the
+// resulting error.
+function applyRouteFromHash() {
+  if (!window.isAuthed) return;
+
+  const [topKey, subKey] = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
+
+  const validTop = TOP_TABS.some((t) => t.key === topKey) ? topKey : "health";
+  activateTab(validTop);
+
+  if (validTop === "health") {
+    const validSub = HEALTH_SUBTABS.some((t) => t.key === subKey) ? subKey : "overview";
+    activateHealthSubtab(validSub);
+  } else if (validTop === "groceries") {
+    const validSub = GROCERIES_SUBTABS.some((t) => t.key === subKey) ? subKey : "cart";
+    activateGroceriesSubtab(validSub);
+  }
+}
+
+window.addEventListener("hashchange", applyRouteFromHash);

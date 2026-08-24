@@ -14,7 +14,8 @@ function showApp(email) {
   authGate.classList.add("hidden");
   appShell.classList.remove("hidden");
   userEmailLabel.textContent = email;
-  loadData(); // kick off the initial data load now that we're authenticated
+  loadData(); // kick off the initial Health data load now that we're authenticated
+  applyRouteFromHash(); // activate whichever tab/subtab the URL points to (defaults to Health)
 }
 
 function showGate(message) {

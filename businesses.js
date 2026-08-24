@@ -86,15 +86,81 @@ function jobStatusSelectHtml(selected) {
   return JOB_STATUSES.map((s) => `<option value="${s.key}" ${s.key === selected ? "selected" : ""}>${s.label}</option>`).join("");
 }
 
+// ---------- businesses table: sort + filter ----------
+const BUSINESS_SORT_HEADERS = [
+  { id: "businessSortName", key: "name" },
+  { id: "businessSortPmf", key: "pmf" },
+  { id: "businessSortContacts", key: "contacts" },
+  { id: "businessSortCareers", key: "careers" },
+  { id: "businessSortOpenings", key: "openings" },
+];
+let businessSortKey = "name";
+let businessSortDir = 1;
+
+const BUSINESS_SORT_VALUE = {
+  name: (b) => b.name.toLowerCase(),
+  pmf: (b) => (b.pmf ? 1 : 0),
+  contacts: (b) => businessPeople.filter((p) => p.business_id === b.id).length,
+  careers: (b) => (b.careers_url ? 1 : 0),
+  openings: (b) => jobOpenings.filter((o) => o.business_id === b.id).length,
+};
+
+function getVisibleBusinesses() {
+  const filterText = document.getElementById("businessFilterInput").value.trim().toLowerCase();
+  const pmfOnly = document.getElementById("businessPmfOnlyFilter").checked;
+
+  const filtered = businesses.filter((b) => {
+    if (pmfOnly && !b.pmf) return false;
+    if (!filterText) return true;
+    const contactNames = businessPeople.filter((p) => p.business_id === b.id).map((p) => p.name).join(" ");
+    const haystack = `${b.name} ${contactNames} ${b.careers_url || ""} ${b.notes || ""}`.toLowerCase();
+    return haystack.includes(filterText);
+  });
+
+  const valueFn = BUSINESS_SORT_VALUE[businessSortKey];
+  return filtered.sort((a, b) => {
+    const av = valueFn(a);
+    const bv = valueFn(b);
+    if (av < bv) return -1 * businessSortDir;
+    if (av > bv) return businessSortDir;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function updateBusinessSortIndicators() {
+  BUSINESS_SORT_HEADERS.forEach(({ id, key }) => {
+    document.getElementById(id + "Indicator").textContent =
+      key === businessSortKey ? (businessSortDir === 1 ? " ▲" : " ▼") : "";
+  });
+}
+
+BUSINESS_SORT_HEADERS.forEach(({ id, key }) => {
+  document.getElementById(id).addEventListener("click", () => {
+    if (businessSortKey === key) { businessSortDir *= -1; } else { businessSortKey = key; businessSortDir = 1; }
+    renderBusinessesTable();
+  });
+});
+
+document.getElementById("businessFilterInput").addEventListener("input", () => renderBusinessesTable());
+document.getElementById("businessPmfOnlyFilter").addEventListener("change", () => renderBusinessesTable());
+
 // ---------- businesses table ----------
 function renderBusinessesTable() {
   const bodyEl = document.getElementById("businessesTableBody");
+  updateBusinessSortIndicators();
+
   if (!businesses.length) {
     bodyEl.innerHTML = `<tr><td colspan="6" class="journal-empty">No businesses tracked yet — add one above.</td></tr>`;
     return;
   }
 
-  bodyEl.innerHTML = businesses.map((b) => {
+  const visible = getVisibleBusinesses();
+  if (!visible.length) {
+    bodyEl.innerHTML = `<tr><td colspan="6" class="journal-empty">No businesses match your filter.</td></tr>`;
+    return;
+  }
+
+  bodyEl.innerHTML = visible.map((b) => {
     const openings = jobOpenings.filter((o) => o.business_id === b.id);
     const contacts = businessPeople.filter((p) => p.business_id === b.id);
 
