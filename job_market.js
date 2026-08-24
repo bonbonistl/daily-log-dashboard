@@ -1,6 +1,7 @@
 let jobMarketLoadedOnce = false;
-let jobCompanies = []; // [{id, name, careers_url, notes, contact_name, contact_title, contact_linkedin_url, contact_email, contact_phone, created_at}]
+let jobCompanies = []; // [{id, name, careers_url, notes, created_at}]
 let jobOpenings = []; // [{id, company_id, title, url, posted_date, status, applied_date, status_changed_at, notes, created_at}]
+let jobContacts = []; // [{id, company_id, name, title, linkedin_url, email, phone, created_at}]
 let openCompanyId = null; // id of the company currently shown in the side rail, or null if closed
 
 const JOB_STATUSES = [
@@ -14,6 +15,8 @@ const JOB_STATUSES = [
 ];
 const JOB_STATUS_LABELS = Object.fromEntries(JOB_STATUSES.map((s) => [s.key, s.label]));
 
+const escAttr = (s) => (s || "").replace(/"/g, "&quot;");
+
 async function loadJobMarketData() {
   if (!jobMarketLoadedOnce) {
     document.getElementById("jobMarketLoading").classList.remove("hidden");
@@ -24,18 +27,19 @@ async function loadJobMarketData() {
   const fetchPromise = Promise.all([
     sb.from("job_companies").select("*").order("name", { ascending: true }),
     sb.from("job_openings").select("*").order("created_at", { ascending: false }),
+    sb.from("job_contacts").select("*").order("created_at", { ascending: true }),
   ]);
 
-  let companiesRes, openingsRes;
+  let companiesRes, openingsRes, contactsRes;
   try {
-    [companiesRes, openingsRes] = await withTimeout(fetchPromise, 15000, "Loading job market data");
+    [companiesRes, openingsRes, contactsRes] = await withTimeout(fetchPromise, 15000, "Loading job market data");
   } catch (e) {
     document.getElementById("jobMarketLoading").textContent = e.message;
     document.getElementById("jobMarketLoading").classList.remove("hidden");
     return;
   }
 
-  const error = companiesRes.error || openingsRes.error;
+  const error = companiesRes.error || openingsRes.error || contactsRes.error;
   if (error) {
     document.getElementById("jobMarketLoading").textContent = "Error loading data: " + error.message;
     document.getElementById("jobMarketLoading").classList.remove("hidden");
@@ -44,6 +48,7 @@ async function loadJobMarketData() {
 
   jobCompanies = companiesRes.data;
   jobOpenings = openingsRes.data;
+  jobContacts = contactsRes.data;
 
   document.getElementById("jobMarketLoading").classList.add("hidden");
   document.getElementById("jobMarketPanel").classList.remove("hidden");
@@ -81,36 +86,44 @@ function jobStatusSelectHtml(selected) {
   return JOB_STATUSES.map((s) => `<option value="${s.key}" ${s.key === selected ? "selected" : ""}>${s.label}</option>`).join("");
 }
 
+// ---------- companies table ----------
 function renderJobCompanies() {
-  const listEl = document.getElementById("jobCompaniesList");
+  const bodyEl = document.getElementById("jobCompaniesTableBody");
   if (!jobCompanies.length) {
-    listEl.innerHTML = `<div class="journal-empty">No companies tracked yet — add one above.</div>`;
+    bodyEl.innerHTML = `<tr><td colspan="5" class="journal-empty">No companies tracked yet — add one above.</td></tr>`;
     return;
   }
 
-  listEl.innerHTML = jobCompanies.map((c) => {
+  bodyEl.innerHTML = jobCompanies.map((c) => {
     const openings = jobOpenings.filter((o) => o.company_id === c.id);
+    const contacts = jobContacts.filter((ct) => ct.company_id === c.id);
+
+    const contactsCell = contacts.length
+      ? contacts.map((ct) => `<span class="job-connection-badge" title="${escAttr(ct.title) || "Your contact here"}">🤝 ${ct.name}</span>`).join(" ")
+      : `<span class="job-table-empty">—</span>`;
+
+    const careersCell = c.careers_url
+      ? `<a class="job-careers-link" href="${c.careers_url}" target="_blank" rel="noopener noreferrer">Careers ↗</a>`
+      : `<span class="job-table-empty">—</span>`;
+
     return `
-      <div class="job-company" data-company-id="${c.id}">
-        <div class="job-company-header">
-          <h3>
-            <button type="button" class="job-company-name-btn">${c.name}</button>
-            ${c.contact_name ? `<span class="job-connection-badge" title="${c.contact_title ? c.contact_title.replace(/"/g, "&quot;") : "Your contact here"}">🤝 ${c.contact_name}</span>` : ""}
-            ${c.careers_url ? `<a class="job-careers-link" href="${c.careers_url}" target="_blank" rel="noopener noreferrer">Careers ↗</a>` : ""}
-          </h3>
-          <button type="button" class="job-company-remove" title="Remove company">&times;</button>
-        </div>
-        ${c.notes ? `<div class="job-company-notes">${c.notes}</div>` : ""}
-        <div class="job-openings-list">
-          ${openings.length ? openings.map((o) => renderJobOpening(o)).join("") : `<div class="journal-empty">No openings yet.</div>`}
-        </div>
-        <form class="add-opening-form" data-company-id="${c.id}">
-          <input type="text" class="new-opening-title" placeholder="Job title" maxlength="200" required />
-          <input type="url" class="new-opening-url" placeholder="URL (optional)" maxlength="500" />
-          <input type="date" class="new-opening-posted" title="Date it went live" />
-          <button type="submit">Add Opening</button>
-        </form>
-      </div>
+      <tr data-company-id="${c.id}">
+        <td><button type="button" class="job-company-name-btn">${c.name}</button></td>
+        <td>${contactsCell}</td>
+        <td>${careersCell}</td>
+        <td>
+          <div class="job-openings-list">
+            ${openings.length ? openings.map((o) => renderJobOpening(o)).join("") : `<span class="job-table-empty">No openings yet</span>`}
+          </div>
+          <form class="add-opening-form" data-company-id="${c.id}">
+            <input type="text" class="new-opening-title" placeholder="Job title" maxlength="200" required />
+            <input type="url" class="new-opening-url" placeholder="URL (optional)" maxlength="500" />
+            <input type="date" class="new-opening-posted" title="Date it went live" />
+            <button type="submit">Add Opening</button>
+          </form>
+        </td>
+        <td class="job-table-actions"><button type="button" class="job-company-remove" title="Remove company">&times;</button></td>
+      </tr>
     `;
   }).join("");
 
@@ -179,6 +192,7 @@ async function removeJobCompany(btn) {
 
   const { error } = await sb.from("job_companies").delete().eq("id", companyId);
   if (error) { alert("Failed to remove company: " + error.message); return; }
+  if (String(openCompanyId) === companyId) closeCompanyDrawer();
   await loadJobMarketData();
 }
 
@@ -241,11 +255,8 @@ function openCompanyDrawer(companyId) {
   document.getElementById("companyDrawerTitle").textContent = company.name;
   document.getElementById("companyCareersUrl").value = company.careers_url || "";
   document.getElementById("companyGeneralNotes").value = company.notes || "";
-  document.getElementById("companyContactName").value = company.contact_name || "";
-  document.getElementById("companyContactTitle").value = company.contact_title || "";
-  document.getElementById("companyContactLinkedin").value = company.contact_linkedin_url || "";
-  document.getElementById("companyContactEmail").value = company.contact_email || "";
-  document.getElementById("companyContactPhone").value = company.contact_phone || "";
+
+  renderCompanyContacts();
 
   document.getElementById("companyDrawer").classList.add("open");
   document.getElementById("companyBackdrop").classList.add("open");
@@ -268,14 +279,83 @@ document.getElementById("companyDetailsForm").addEventListener("submit", async (
   const update = {
     careers_url: document.getElementById("companyCareersUrl").value.trim() || null,
     notes: document.getElementById("companyGeneralNotes").value.trim() || null,
-    contact_name: document.getElementById("companyContactName").value.trim() || null,
-    contact_title: document.getElementById("companyContactTitle").value.trim() || null,
-    contact_linkedin_url: document.getElementById("companyContactLinkedin").value.trim() || null,
-    contact_email: document.getElementById("companyContactEmail").value.trim() || null,
-    contact_phone: document.getElementById("companyContactPhone").value.trim() || null,
   };
 
   const { error } = await sb.from("job_companies").update(update).eq("id", openCompanyId);
   if (error) { alert("Failed to save company details: " + error.message); return; }
   await loadJobMarketData();
 });
+
+// ---------- contacts (in the rail) ----------
+function renderCompanyContacts() {
+  const listEl = document.getElementById("companyContactsList");
+  if (openCompanyId == null) { listEl.innerHTML = ""; return; }
+
+  const contacts = jobContacts.filter((ct) => ct.company_id === openCompanyId);
+  if (!contacts.length) {
+    listEl.innerHTML = `<div class="journal-empty">No contacts yet — add one below.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = contacts.map((ct) => `
+    <div class="job-contact-card" data-contact-id="${ct.id}">
+      <div class="job-contact-card-header">
+        <input type="text" class="job-contact-field" data-field="name" value="${escAttr(ct.name)}" placeholder="Full name" />
+        <button type="button" class="job-contact-remove" title="Remove contact">&times;</button>
+      </div>
+      <input type="text" class="job-contact-field" data-field="title" value="${escAttr(ct.title)}" placeholder="Title" />
+      <input type="url" class="job-contact-field" data-field="linkedin_url" value="${escAttr(ct.linkedin_url)}" placeholder="LinkedIn URL" />
+      <input type="email" class="job-contact-field" data-field="email" value="${escAttr(ct.email)}" placeholder="Email" />
+      <input type="tel" class="job-contact-field" data-field="phone" value="${escAttr(ct.phone)}" placeholder="Phone" />
+    </div>
+  `).join("");
+
+  document.querySelectorAll(".job-contact-field").forEach((input) => {
+    input.addEventListener("change", () => updateContactField(input));
+  });
+  document.querySelectorAll(".job-contact-remove").forEach((btn) => {
+    btn.addEventListener("click", () => removeContact(btn));
+  });
+}
+
+document.getElementById("addContactForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (openCompanyId == null) return;
+  const nameInput = document.getElementById("newContactName");
+  const name = nameInput.value.trim();
+  if (!name) return;
+
+  const { error } = await sb.from("job_contacts").insert({ company_id: openCompanyId, name });
+  if (error) { alert("Failed to add contact: " + error.message); return; }
+
+  nameInput.value = "";
+  await loadJobMarketData();
+  renderCompanyContacts();
+});
+
+async function updateContactField(input) {
+  if (input.dataset.busy) return;
+  input.dataset.busy = "1";
+  input.disabled = true;
+
+  const contactId = input.closest("[data-contact-id]").dataset.contactId;
+  const field = input.dataset.field;
+  const value = input.value.trim() || null;
+  if (field === "name" && !value) { alert("Name can't be blank."); input.disabled = false; delete input.dataset.busy; renderCompanyContacts(); return; }
+
+  const { error } = await sb.from("job_contacts").update({ [field]: value }).eq("id", contactId);
+  if (error) { alert("Failed to update contact: " + error.message); input.disabled = false; delete input.dataset.busy; return; }
+  await loadJobMarketData();
+  renderCompanyContacts();
+}
+
+async function removeContact(btn) {
+  const contactId = btn.closest("[data-contact-id]").dataset.contactId;
+  const contact = jobContacts.find((ct) => String(ct.id) === contactId);
+  if (!confirm(`Remove contact "${contact.name}"?`)) return;
+
+  const { error } = await sb.from("job_contacts").delete().eq("id", contactId);
+  if (error) { alert("Failed to remove contact: " + error.message); return; }
+  await loadJobMarketData();
+  renderCompanyContacts();
+}

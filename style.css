@@ -1007,40 +1007,41 @@ button:hover { border-color: var(--accent); }
   margin-top: 4px;
 }
 
-.job-companies-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.job-companies-table {
+  width: 100%;
+  border-collapse: collapse;
   margin-top: 18px;
+  font-size: 13px;
 }
+.job-companies-table th {
+  text-align: left;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 10px 8px 10px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.job-companies-table td {
+  vertical-align: top;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.job-companies-table tbody tr:hover { background: rgba(15, 118, 110, 0.04); }
+.job-companies-table td.journal-empty { text-align: center; padding: 20px 10px; }
 
-.job-company {
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  padding: 14px 16px;
-}
-
-.job-company-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.job-company-header h3 {
-  margin: 0;
-  font-size: 15px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+.job-table-empty { color: var(--muted); font-size: 12px; }
+.job-table-actions { text-align: right; white-space: nowrap; }
 
 .job-connection-badge {
+  display: inline-block;
   font-size: 12px;
   font-weight: 400;
   color: var(--accent);
   background: rgba(15, 118, 110, 0.1);
   padding: 2px 8px;
   border-radius: 10px;
+  margin: 0 4px 4px 0;
 }
 
 .job-company-remove {
@@ -1054,17 +1055,11 @@ button:hover { border-color: var(--accent); }
 }
 .job-company-remove:hover { color: var(--danger); }
 
-.job-company-notes {
-  font-size: 13px;
-  color: var(--muted);
-  margin-top: 6px;
-}
-
 .job-openings-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
+  min-width: 260px;
 }
 
 .job-opening {
@@ -1129,3 +1124,111 @@ button:hover { border-color: var(--accent); }
 .job-status-badge.status-offered { background: rgba(15, 118, 110, 0.14); color: var(--accent); }
 .job-status-badge.status-declined,
 .job-status-badge.status-auto_declined { background: rgba(220, 38, 38, 0.12); color: var(--danger); }
+
+.add-opening-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.add-opening-form input {
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.add-opening-form .new-opening-title { flex: 1; min-width: 100px; }
+.add-opening-form .new-opening-url { flex: 1; min-width: 100px; }
+.add-opening-form button {
+  background: var(--accent);
+  border: none;
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ---------- job market: contact rail ---------- */
+.company-contacts-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--panel-border);
+}
+.company-contacts-section h3 {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.job-contacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.job-contact-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px;
+}
+.job-contact-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.job-contact-card-header .job-contact-field { flex: 1; font-weight: 600; }
+
+.job-contact-field {
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.job-contact-remove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+.job-contact-remove:hover { color: var(--danger); }
+
+.add-contact-form {
+  display: flex;
+  gap: 8px;
+}
+.add-contact-form input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.add-contact-form button {
+  background: var(--accent);
+  border: none;
+  color: #ffffff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}

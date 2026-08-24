@@ -282,7 +282,18 @@
       </form>
       <p class="hint drawer-hint">Click a company name to add a careers link and your contact there.</p>
 
-      <div id="jobCompaniesList" class="job-companies-list"></div>
+      <table class="job-companies-table">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Contacts</th>
+            <th>Careers</th>
+            <th>Openings</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="jobCompaniesTableBody"></tbody>
+      </table>
     </section>
   </main>
 
@@ -299,26 +310,18 @@
       <label>Notes
         <textarea id="companyGeneralNotes" rows="3" placeholder="Anything else worth remembering"></textarea>
       </label>
-
-      <h3>My Contact</h3>
-      <label>Name
-        <input type="text" id="companyContactName" placeholder="Full name" maxlength="200" />
-      </label>
-      <label>Title
-        <input type="text" id="companyContactTitle" placeholder="e.g. Engineering Manager" maxlength="200" />
-      </label>
-      <label>LinkedIn
-        <input type="url" id="companyContactLinkedin" placeholder="https://linkedin.com/in/..." maxlength="500" />
-      </label>
-      <label>Email
-        <input type="email" id="companyContactEmail" placeholder="name@company.com" maxlength="200" />
-      </label>
-      <label>Phone
-        <input type="tel" id="companyContactPhone" placeholder="(555) 555-5555" maxlength="50" />
-      </label>
-
       <button type="submit">Save</button>
     </form>
+
+    <div class="company-contacts-section">
+      <h3>Contacts</h3>
+      <p class="hint drawer-hint">People you know at this company. Add a name, then fill in the rest — every field saves as you leave it.</p>
+      <div id="companyContactsList" class="job-contacts-list"></div>
+      <form id="addContactForm" class="add-contact-form">
+        <input type="text" id="newContactName" placeholder="Contact name" maxlength="200" required />
+        <button type="submit">Add Contact</button>
+      </form>
+    </div>
   </aside>
 
   <div id="practicesBackdrop" class="journal-backdrop"></div>
