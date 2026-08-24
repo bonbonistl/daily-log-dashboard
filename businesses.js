@@ -90,7 +90,7 @@ function jobStatusSelectHtml(selected) {
 function renderBusinessesTable() {
   const bodyEl = document.getElementById("businessesTableBody");
   if (!businesses.length) {
-    bodyEl.innerHTML = `<tr><td colspan="5" class="journal-empty">No businesses tracked yet — add one above.</td></tr>`;
+    bodyEl.innerHTML = `<tr><td colspan="6" class="journal-empty">No businesses tracked yet — add one above.</td></tr>`;
     return;
   }
 
@@ -109,6 +109,7 @@ function renderBusinessesTable() {
     return `
       <tr data-business-id="${b.id}">
         <td><button type="button" class="job-company-name-btn">${b.name}</button></td>
+        <td class="job-table-pmf"><input type="checkbox" class="pmf-checkbox" title="Product Market Fit — you'd be a good fit there" ${b.pmf ? "checked" : ""} /></td>
         <td>${contactsCell}</td>
         <td>${careersCell}</td>
         <td>
@@ -158,6 +159,9 @@ function bindBusinessRowEvents() {
   document.querySelectorAll(".job-company-remove").forEach((btn) => {
     btn.addEventListener("click", () => removeBusiness(btn));
   });
+  document.querySelectorAll(".pmf-checkbox").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => updatePmf(checkbox));
+  });
   document.querySelectorAll(".add-opening-form").forEach((form) => {
     form.addEventListener("submit", (e) => addJobOpening(e, form));
   });
@@ -187,13 +191,48 @@ async function removeBusiness(btn) {
   const businessId = btn.closest("[data-business-id]").dataset.businessId;
   const business = businesses.find((b) => String(b.id) === businessId);
   const openingCount = jobOpenings.filter((o) => String(o.business_id) === businessId).length;
+  const linkedContacts = businessPeople.filter((p) => String(p.business_id) === businessId);
+
   const warning = openingCount ? ` This will also remove ${openingCount} opening(s).` : "";
   if (!confirm(`Remove ${business.name}?${warning}`)) return;
+
+  let deleteContactsToo = false;
+  if (linkedContacts.length) {
+    const names = linkedContacts.map((p) => p.name).join(", ");
+    deleteContactsToo = confirm(
+      `${business.name} has ${linkedContacts.length} contact(s) linked: ${names}.\n\n` +
+      `Click OK to delete them from your CRM too, or Cancel to keep them — just unlinked from this business.`
+    );
+  }
+
+  if (deleteContactsToo) {
+    const { error: peopleError } = await sb.from("people").delete().in("id", linkedContacts.map((p) => p.id));
+    if (peopleError) { alert("Failed to delete contacts: " + peopleError.message); return; }
+  }
 
   const { error } = await sb.from("businesses").delete().eq("id", businessId);
   if (error) { alert("Failed to remove business: " + error.message); return; }
   if (String(openBusinessId) === businessId) closeBusinessDrawer();
   await loadBusinessesData();
+}
+
+async function updatePmf(checkbox) {
+  if (checkbox.dataset.busy) return;
+  checkbox.dataset.busy = "1";
+  checkbox.disabled = true;
+
+  const businessId = checkbox.closest("[data-business-id]").dataset.businessId;
+  const { error } = await sb.from("businesses").update({ pmf: checkbox.checked }).eq("id", businessId);
+  if (error) {
+    alert("Failed to update PMF: " + error.message);
+    checkbox.checked = !checkbox.checked;
+  } else {
+    const business = businesses.find((b) => String(b.id) === businessId);
+    if (business) business.pmf = checkbox.checked;
+  }
+
+  checkbox.disabled = false;
+  delete checkbox.dataset.busy;
 }
 
 // ---------- openings ----------

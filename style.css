@@ -1046,6 +1046,8 @@ button:hover { border-color: var(--accent); }
 
 .job-table-empty { color: var(--muted); font-size: 12px; }
 .job-table-actions { text-align: right; white-space: nowrap; }
+.job-table-pmf { text-align: center; }
+.pmf-checkbox { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
 
 .job-connection-badge {
   display: inline-block;
