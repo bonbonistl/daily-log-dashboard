@@ -941,3 +941,135 @@ button:hover { border-color: var(--accent); }
   color: var(--muted);
   font-style: italic;
 }
+
+/* ---------- job market ---------- */
+.job-connection-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.job-companies-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.job-company {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.job-company-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.job-company-header h3 {
+  margin: 0;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.job-connection-badge {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--accent);
+  background: rgba(15, 118, 110, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.job-company-remove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.job-company-remove:hover { color: var(--danger); }
+
+.job-company-notes {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.job-openings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.job-opening {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.job-opening-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.job-opening-title { font-size: 14px; overflow-wrap: anywhere; }
+.job-opening-title a { color: var(--text); }
+
+.job-opening-meta {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.job-opening-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.job-status-select { font-size: 12px; }
+
+.job-opening-remove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.job-opening-remove:hover { color: var(--danger); }
+
+.job-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 10px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.job-status-badge.status-watching { background: var(--panel-border); color: var(--muted); }
+.job-status-badge.status-applied { background: rgba(37, 99, 235, 0.12); color: var(--accent3); }
+.job-status-badge.status-heard_back { background: rgba(37, 99, 235, 0.12); color: var(--accent3); }
+.job-status-badge.status-interviewing { background: rgba(180, 83, 9, 0.14); color: var(--accent2); }
+.job-status-badge.status-offered { background: rgba(15, 118, 110, 0.14); color: var(--accent); }
+.job-status-badge.status-declined,
+.job-status-badge.status-auto_declined { background: rgba(220, 38, 38, 0.12); color: var(--danger); }

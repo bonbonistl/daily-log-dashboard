@@ -26,6 +26,7 @@
       <button class="tab-btn" id="spiritualTabBtn" data-tab="spiritual">Habits</button>
       <button class="tab-btn" id="insightsTabBtn" data-tab="insights">Insights</button>
       <button class="tab-btn" id="groceriesTabBtn" data-tab="groceries">Groceries</button>
+      <button class="tab-btn" id="jobMarketTabBtn" data-tab="jobMarket">Job Market</button>
     </div>
     <div class="controls" id="healthControls">
       <label>
@@ -263,6 +264,29 @@
     </div>
   </main>
 
+  <main id="jobMarketApp" class="tab-content hidden">
+    <div id="jobMarketLoading">Loading data…</div>
+
+    <section class="panel hidden" id="jobMarketPanel">
+      <div class="panel-heading-row">
+        <h2>Job Market</h2>
+        <span id="jobMarketUpdatedAt" class="updated-at"></span>
+      </div>
+      <p class="hint drawer-hint">Track companies you're watching, who you know there, and every opening's status through the pipeline.</p>
+
+      <section id="jobMarketCards" class="cards"></section>
+
+      <form id="addCompanyForm" class="plan-add-form">
+        <input type="text" id="newCompanyName" placeholder="Company name" maxlength="200" required />
+        <label class="job-connection-check"><input type="checkbox" id="newCompanyConnection" /> Know someone there</label>
+        <input type="text" id="newCompanyConnectionNotes" placeholder="Who? (optional)" maxlength="200" />
+        <button type="submit">Add Company</button>
+      </form>
+
+      <div id="jobCompaniesList" class="job-companies-list"></div>
+    </section>
+  </main>
+
   <div id="practicesBackdrop" class="journal-backdrop"></div>
   <aside id="practicesDrawer" class="journal-drawer">
     <div class="journal-header">
@@ -297,6 +321,7 @@
   <script src="food_plan.js"></script>
   <script src="insights.js"></script>
   <script src="groceries.js"></script>
+  <script src="job_market.js"></script>
   <script src="tabs.js"></script>
   <script src="auth.js"></script>
 </body>

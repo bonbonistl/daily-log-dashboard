@@ -6,11 +6,13 @@ const TOP_TABS = [
   { key: "spiritual", btnId: "spiritualTabBtn", contentId: "spiritualApp" },
   { key: "insights", btnId: "insightsTabBtn", contentId: "insightsApp" },
   { key: "groceries", btnId: "groceriesTabBtn", contentId: "groceriesApp" },
+  { key: "jobMarket", btnId: "jobMarketTabBtn", contentId: "jobMarketApp" },
 ];
 
 let spiritualLoaded = false;
 let insightsLoaded = false;
 let groceriesLoaded = false;
+let jobMarketLoaded = false;
 
 function activateTab(key) {
   TOP_TABS.forEach((t) => {
@@ -30,6 +32,10 @@ function activateTab(key) {
   if (key === "groceries" && !groceriesLoaded) {
     groceriesLoaded = true;
     loadGroceriesData();
+  }
+  if (key === "jobMarket" && !jobMarketLoaded) {
+    jobMarketLoaded = true;
+    loadJobMarketData();
   }
 }
 
