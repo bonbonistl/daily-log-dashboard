@@ -1,5 +1,5 @@
 let crmLoadedOnce = false;
-let people = []; // [{id, name, title, linkedin_url, instagram_url, email, phone, city, state, country, birthday, business_id, created_at}] — birthday is free text (e.g. "8/24"), not a date column, since the year is often unknown
+let people = []; // [{id, name, title, linkedin_url, instagram_url, email, phone, city, state, country, birthday, birthday_celebrated_year, business_id, created_at}] — birthday is free text (e.g. "8/24"), not a date column, since the year is often unknown
 let crmBusinesses = []; // [{id, name}] — lightweight, just for the business select + display
 let openPersonId = null; // id of the person currently shown in the side rail, or null if closed
 
@@ -59,6 +59,7 @@ const PEOPLE_SORT_HEADERS = [
   { id: "peopleSortBusiness", key: "business" },
   { id: "peopleSortLocation", key: "location" },
   { id: "peopleSortBirthday", key: "birthday" },
+  { id: "peopleSortCelebrated", key: "celebrated" },
   { id: "peopleSortLinks", key: "links" },
 ];
 let peopleSortKey = "name";
@@ -68,18 +69,31 @@ let peopleSortDir = 1;
 // pushing them past every real string ("￿" sorts after any normal text).
 const NULLS_LAST = "￿";
 
+function currentYear() {
+  return Number(todayLocalStr().slice(0, 4));
+}
+
+function celebratedThisYear(p) {
+  return p.birthday_celebrated_year === currentYear();
+}
+
 const PEOPLE_SORT_VALUE = {
   name: (p) => p.name.toLowerCase(),
   business: (p) => (businessNameFor(p.business_id) || NULLS_LAST).toLowerCase(),
   location: (p) => ([p.city, p.state, p.country].filter(Boolean).join(", ") || NULLS_LAST).toLowerCase(),
   birthday: (p) => (p.birthday || NULLS_LAST).toLowerCase(),
+  // Not-yet-celebrated first, then celebrated, then no-birthday-at-all last — surfaces who still needs a shoutout.
+  celebrated: (p) => (!p.birthday ? 2 : celebratedThisYear(p) ? 1 : 0),
   links: (p) => (p.linkedin_url ? 1 : 0) + (p.instagram_url ? 1 : 0),
 };
 
 function getVisiblePeople() {
   const filterText = document.getElementById("peopleFilterInput").value.trim().toLowerCase();
+  const notCelebratedOnly = document.getElementById("peopleNotCelebratedFilter").checked;
 
-  const filtered = !filterText ? people : people.filter((p) => {
+  const filtered = people.filter((p) => {
+    if (notCelebratedOnly && (!p.birthday || celebratedThisYear(p))) return false;
+    if (!filterText) return true;
     const businessName = businessNameFor(p.business_id) || "";
     const location = [p.city, p.state, p.country].filter(Boolean).join(", ");
     const haystack = `${p.name} ${businessName} ${p.title || ""} ${location}`.toLowerCase();
@@ -111,6 +125,7 @@ PEOPLE_SORT_HEADERS.forEach(({ id, key }) => {
 });
 
 document.getElementById("peopleFilterInput").addEventListener("input", () => renderPeopleTable());
+document.getElementById("peopleNotCelebratedFilter").addEventListener("change", () => renderPeopleTable());
 
 // ---------- people table ----------
 function renderPeopleTable() {
@@ -118,13 +133,13 @@ function renderPeopleTable() {
   updatePeopleSortIndicators();
 
   if (!people.length) {
-    bodyEl.innerHTML = `<tr><td colspan="6" class="journal-empty">No people tracked yet — add one above.</td></tr>`;
+    bodyEl.innerHTML = `<tr><td colspan="7" class="journal-empty">No people tracked yet — add one above.</td></tr>`;
     return;
   }
 
   const visible = getVisiblePeople();
   if (!visible.length) {
-    bodyEl.innerHTML = `<tr><td colspan="6" class="journal-empty">No people match your filter.</td></tr>`;
+    bodyEl.innerHTML = `<tr><td colspan="7" class="journal-empty">No people match your filter.</td></tr>`;
     return;
   }
 
@@ -135,6 +150,9 @@ function renderPeopleTable() {
       p.linkedin_url ? `<a class="job-careers-link" href="${p.linkedin_url}" target="_blank" rel="noopener noreferrer">LinkedIn</a>` : "",
       p.instagram_url ? `<a class="job-careers-link" href="${p.instagram_url}" target="_blank" rel="noopener noreferrer">Instagram</a>` : "",
     ].filter(Boolean).join(" · ");
+    const celebratedCell = p.birthday
+      ? `<input type="checkbox" class="celebrated-checkbox" title="Celebrated their ${currentYear()} birthday" ${celebratedThisYear(p) ? "checked" : ""} />`
+      : `<span class="job-table-empty">—</span>`;
 
     return `
       <tr data-person-id="${p.id}">
@@ -145,6 +163,7 @@ function renderPeopleTable() {
         <td>${businessName ? businessName : `<span class="job-table-empty">—</span>`}</td>
         <td>${location || `<span class="job-table-empty">—</span>`}</td>
         <td>${p.birthday || `<span class="job-table-empty">—</span>`}</td>
+        <td class="job-table-pmf">${celebratedCell}</td>
         <td>${links || `<span class="job-table-empty">—</span>`}</td>
         <td class="job-table-actions"><button type="button" class="job-company-remove" title="Remove person">&times;</button></td>
       </tr>
@@ -161,6 +180,29 @@ function bindPeopleRowEvents() {
   document.querySelectorAll(".job-company-remove").forEach((btn) => {
     btn.addEventListener("click", () => removePerson(btn));
   });
+  document.querySelectorAll(".celebrated-checkbox").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => updateCelebrated(checkbox));
+  });
+}
+
+async function updateCelebrated(checkbox) {
+  if (checkbox.dataset.busy) return;
+  checkbox.dataset.busy = "1";
+  checkbox.disabled = true;
+
+  const personId = checkbox.closest("[data-person-id]").dataset.personId;
+  const newYear = checkbox.checked ? currentYear() : null;
+  const { error } = await sb.from("people").update({ birthday_celebrated_year: newYear }).eq("id", personId);
+  if (error) {
+    alert("Failed to update: " + error.message);
+    checkbox.checked = !checkbox.checked;
+  } else {
+    const person = people.find((p) => String(p.id) === personId);
+    if (person) person.birthday_celebrated_year = newYear;
+  }
+
+  checkbox.disabled = false;
+  delete checkbox.dataset.busy;
 }
 
 // ---------- add / remove ----------
