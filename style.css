@@ -521,6 +521,7 @@ button:hover { border-color: var(--accent); }
   padding: 6px 4px;
   border-radius: 6px;
   font-size: 15px;
+  cursor: pointer;
 }
 
 .practice-row .time-toggles {
@@ -558,6 +559,10 @@ button:hover { border-color: var(--accent); }
   font-size: 13px;
 }
 
+.add-practice-form input.practice-emoji-input {
+  flex: 0 0 40px;
+}
+
 .add-practice-form button {
   background: var(--accent);
   border: none;
@@ -567,6 +572,32 @@ button:hover { border-color: var(--accent); }
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.emoji-picker-popover {
+  position: fixed;
+  z-index: 200;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.emoji-picker-popover button {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.emoji-picker-popover button:hover {
+  background: var(--panel-border);
 }
 
 .updated-at {

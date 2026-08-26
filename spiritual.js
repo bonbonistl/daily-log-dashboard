@@ -355,12 +355,57 @@ function renderDisruptionList() {
   `).join("");
 }
 
+// ---------- emoji picker ----------
+// One shared popover (lazily created, reused for both the new-practice form and every
+// existing-practice row) rather than one per input, since only one can be open at a time.
+const HABIT_EMOJI_CHOICES = ["🙏", "🧘", "📖", "📓", "✍️", "💧", "🥗", "🍎", "🏃", "🚶", "💪", "🧹", "😴", "🌙", "☀️", "📵", "🎯", "🧠", "❤️", "🎵", "🚿", "🧴", "🦷", "🌿"];
+let emojiPickerPopover = null;
+let emojiPickerTargetInput = null;
+
+function closeEmojiPicker() {
+  if (emojiPickerPopover) emojiPickerPopover.classList.add("hidden");
+  emojiPickerTargetInput = null;
+}
+
+function openEmojiPicker(targetInput) {
+  if (!emojiPickerPopover) {
+    emojiPickerPopover = document.createElement("div");
+    emojiPickerPopover.className = "emoji-picker-popover hidden";
+    emojiPickerPopover.innerHTML = HABIT_EMOJI_CHOICES.map((em) => `<button type="button">${em}</button>`).join("");
+    document.body.appendChild(emojiPickerPopover);
+    emojiPickerPopover.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn || !emojiPickerTargetInput) return;
+      emojiPickerTargetInput.value = btn.textContent;
+      emojiPickerTargetInput.dispatchEvent(new Event("change", { bubbles: true }));
+      closeEmojiPicker();
+    });
+  }
+  emojiPickerTargetInput = targetInput;
+  const rect = targetInput.getBoundingClientRect();
+  emojiPickerPopover.style.top = `${rect.bottom + 4}px`;
+  emojiPickerPopover.style.left = `${rect.left}px`;
+  emojiPickerPopover.classList.remove("hidden");
+}
+
+document.addEventListener("click", (e) => {
+  const input = e.target.closest(".practice-emoji-input");
+  if (input) {
+    const alreadyOpenForThis = emojiPickerTargetInput === input && emojiPickerPopover && !emojiPickerPopover.classList.contains("hidden");
+    alreadyOpenForThis ? closeEmojiPicker() : openEmojiPicker(input);
+    return;
+  }
+  if (emojiPickerPopover && !emojiPickerPopover.contains(e.target)) closeEmojiPicker();
+});
+
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeEmojiPicker(); });
+
 // ---------- manage practices drawer ----------
 function renderPracticesList() {
   document.getElementById("practicesList").innerHTML = rolPractices.map((p) => `
     <div class="practice-row">
       <div class="name-row">
-        <input type="text" class="practice-emoji-input" data-id="${p.id}" value="${p.emoji || ""}" placeholder="🙂" maxlength="8" />
+        <input type="text" class="practice-emoji-input" data-id="${p.id}" value="${p.emoji || ""}" placeholder="🙂" maxlength="8" autocomplete="off" readonly />
         <div class="name">${p.name}</div>
       </div>
       <div class="time-toggles">
@@ -421,10 +466,19 @@ document.getElementById("addPracticeForm").addEventListener("submit", async (e) 
   const name = input.value.trim();
   const emoji = emojiInput.value.trim() || null;
   if (!name) return;
-  const sortOrder = rolPractices.length ? Math.max(...rolPractices.map((p) => p.sort_order)) + 1 : 1;
-  const { error } = await sb.from("rule_of_life_practices").insert({ name, emoji, sort_order: sortOrder });
-  if (error) { alert("Failed to add practice: " + error.message); return; }
-  emojiInput.value = "";
-  input.value = "";
-  await loadSpiritualData();
+  try {
+    const sortOrder = rolPractices.length ? Math.max(...rolPractices.map((p) => p.sort_order)) + 1 : 1;
+    // New practices start opted out of every time slot — the person adding it picks
+    // where it belongs afterward via the checkboxes, rather than it defaulting into all four.
+    const { error } = await sb.from("rule_of_life_practices").insert({
+      name, emoji, sort_order: sortOrder,
+      morning: false, mid_morning: false, noon: false, night: false,
+    });
+    if (error) throw error;
+    emojiInput.value = "";
+    input.value = "";
+    await loadSpiritualData();
+  } catch (err) {
+    alert("Failed to add practice: " + (err && err.message ? err.message : String(err)));
+  }
 });
