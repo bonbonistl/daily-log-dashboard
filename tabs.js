@@ -8,6 +8,7 @@ const TOP_TABS = [
   { key: "groceries", btnId: "groceriesTabBtn", contentId: "groceriesApp" },
   { key: "businesses", btnId: "businessesTabBtn", contentId: "businessesApp" },
   { key: "crm", btnId: "crmTabBtn", contentId: "crmApp" },
+  { key: "paper", btnId: "paperTabBtn", contentId: "paperApp" },
 ];
 
 let spiritualLoaded = false;
@@ -15,6 +16,7 @@ let insightsLoaded = false;
 let groceriesLoaded = false;
 let businessesLoaded = false;
 let crmLoaded = false;
+let paperLoaded = false;
 
 // Which subtab is current within a top tab that has subtabs — tracked so the
 // hash can be rebuilt (e.g. "#groceries/inventory") whenever either level changes.
@@ -47,6 +49,10 @@ function activateTab(key) {
   if (key === "crm" && !crmLoaded) {
     crmLoaded = true;
     loadCrmData();
+  }
+  if (key === "paper" && !paperLoaded) {
+    paperLoaded = true;
+    loadPaperData();
   }
 
   updateUrlHash();

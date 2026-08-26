@@ -28,6 +28,7 @@
       <button class="tab-btn" id="groceriesTabBtn" data-tab="groceries">Groceries</button>
       <button class="tab-btn" id="businessesTabBtn" data-tab="businesses">Businesses</button>
       <button class="tab-btn" id="crmTabBtn" data-tab="crm">CRM</button>
+      <button class="tab-btn" id="paperTabBtn" data-tab="paper">Paper</button>
     </div>
     <div class="controls" id="healthControls">
       <label>
@@ -413,6 +414,36 @@
     </form>
   </aside>
 
+  <main id="paperApp" class="tab-content hidden">
+    <div id="paperLoading">Loading data…</div>
+
+    <section class="panel hidden" id="paperPanel">
+      <div class="panel-heading-row">
+        <h2>Paper</h2>
+        <span id="paperUpdatedAt" class="updated-at"></span>
+      </div>
+      <p class="hint drawer-hint">Receipts and other paper documents you've received over the years, with a link to the scanned copy in Drive.</p>
+
+      <div class="table-filter-row">
+        <input type="text" id="paperFilterInput" placeholder="Filter by type, vendor, or details…" />
+      </div>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th id="paperSortDate" class="sortable-th">Date<span class="sort-indicator" id="paperSortDateIndicator"></span></th>
+            <th id="paperSortType" class="sortable-th">Type<span class="sort-indicator" id="paperSortTypeIndicator"></span></th>
+            <th id="paperSortVendor" class="sortable-th">Vendor<span class="sort-indicator" id="paperSortVendorIndicator"></span></th>
+            <th id="paperSortDetails" class="sortable-th">Details<span class="sort-indicator" id="paperSortDetailsIndicator"></span></th>
+            <th id="paperSortAmount" class="sortable-th">Amount<span class="sort-indicator" id="paperSortAmountIndicator"></span></th>
+            <th id="paperSortFolder" class="sortable-th">Folder<span class="sort-indicator" id="paperSortFolderIndicator"></span></th>
+          </tr>
+        </thead>
+        <tbody id="paperTableBody"></tbody>
+      </table>
+    </section>
+  </main>
+
   <div id="practicesBackdrop" class="journal-backdrop"></div>
   <aside id="practicesDrawer" class="journal-drawer">
     <div class="journal-header">
@@ -449,6 +480,7 @@
   <script src="groceries.js"></script>
   <script src="businesses.js"></script>
   <script src="crm.js"></script>
+  <script src="paper.js"></script>
   <script src="tabs.js"></script>
   <script src="auth.js"></script>
 </body>
