@@ -77,11 +77,20 @@ function celebratedThisYear(p) {
   return p.birthday_celebrated_year === currentYear();
 }
 
+// Birthday is free text like "8/24" — sort by calendar order (month, then day),
+// not as a string, or "10/5" would sort before "2/3". Unparseable/missing values sort last.
+function birthdaySortValue(p) {
+  const match = (p.birthday || "").match(/^(\d{1,2})\/(\d{1,2})/);
+  if (!match) return 9999;
+  const [, month, day] = match;
+  return Number(month) * 100 + Number(day);
+}
+
 const PEOPLE_SORT_VALUE = {
   name: (p) => p.name.toLowerCase(),
   business: (p) => (businessNameFor(p.business_id) || NULLS_LAST).toLowerCase(),
   location: (p) => ([p.city, p.state, p.country].filter(Boolean).join(", ") || NULLS_LAST).toLowerCase(),
-  birthday: (p) => (p.birthday || NULLS_LAST).toLowerCase(),
+  birthday: birthdaySortValue,
   // Not-yet-celebrated first, then celebrated, then no-birthday-at-all last — surfaces who still needs a shoutout.
   celebrated: (p) => (!p.birthday ? 2 : celebratedThisYear(p) ? 1 : 0),
   links: (p) => (p.linkedin_url ? 1 : 0) + (p.instagram_url ? 1 : 0),
