@@ -1021,6 +1021,18 @@ button:hover { border-color: var(--accent); }
 }
 .detail-form-section .plan-add-form { margin-top: 10px; }
 
+.careers-check-history {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--muted);
+  max-height: 140px;
+  overflow-y: auto;
+}
+.careers-check-history li { padding: 4px 0; border-bottom: 1px solid var(--panel-border); }
+.careers-check-history li:last-child { border-bottom: none; }
+
 .data-table {
   width: 100%;
   border-collapse: collapse;

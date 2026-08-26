@@ -2,6 +2,7 @@ let businessesLoadedOnce = false;
 let businesses = []; // [{id, name, careers_url, notes, created_at}]
 let jobOpenings = []; // [{id, business_id, title, url, posted_date, status, applied_date, status_changed_at, notes, created_at}]
 let businessPeople = []; // [{id, name, title, business_id}] — the full CRM roster, used for the table's Contacts column and the rail's link/add-contact controls
+let businessCareersChecks = []; // [{id, business_id, checked_at}] — history of "I checked the careers page" clicks, for the currently open drawer only
 let openBusinessId = null; // id of the business currently shown in the side rail, or null if closed
 
 const JOB_STATUSES = [
@@ -362,6 +363,7 @@ function openBusinessDrawer(businessId) {
   document.getElementById("businessGeneralNotes").value = business.notes || "";
 
   renderBusinessContacts();
+  loadBusinessCareersChecks();
 
   document.getElementById("businessDrawer").classList.add("open");
   document.getElementById("businessBackdrop").classList.add("open");
@@ -369,6 +371,7 @@ function openBusinessDrawer(businessId) {
 
 function closeBusinessDrawer() {
   openBusinessId = null;
+  businessCareersChecks = [];
   document.getElementById("businessDrawer").classList.remove("open");
   document.getElementById("businessBackdrop").classList.remove("open");
 }
@@ -389,6 +392,46 @@ document.getElementById("businessDetailsForm").addEventListener("submit", async 
   const { error } = await sb.from("businesses").update(update).eq("id", openBusinessId);
   if (error) { alert("Failed to save business details: " + error.message); return; }
   await loadBusinessesData();
+});
+
+// ---------- business detail rail: careers page checks ----------
+async function loadBusinessCareersChecks() {
+  const businessId = openBusinessId;
+  const { data, error } = await sb
+    .from("business_careers_checks")
+    .select("*")
+    .eq("business_id", businessId)
+    .order("checked_at", { ascending: false });
+
+  if (String(openBusinessId) !== String(businessId)) return; // drawer moved on while this was in flight
+
+  if (error) {
+    document.getElementById("businessCareersChecksList").innerHTML =
+      `<div class="journal-empty">Failed to load history: ${error.message}</div>`;
+    return;
+  }
+
+  businessCareersChecks = data;
+  renderBusinessCareersChecks();
+}
+
+function renderBusinessCareersChecks() {
+  const listEl = document.getElementById("businessCareersChecksList");
+  listEl.innerHTML = businessCareersChecks.length
+    ? `<ul class="careers-check-history">${businessCareersChecks.map((c) => `<li>${new Date(c.checked_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</li>`).join("")}</ul>`
+    : `<div class="journal-empty">Not checked yet.</div>`;
+}
+
+document.getElementById("businessLogCareersCheckBtn").addEventListener("click", async (e) => {
+  if (openBusinessId == null) return;
+  const btn = e.currentTarget;
+  btn.disabled = true;
+
+  const { error } = await sb.from("business_careers_checks").insert({ business_id: openBusinessId });
+  if (error) { alert("Failed to log check: " + error.message); btn.disabled = false; return; }
+
+  await loadBusinessCareersChecks();
+  btn.disabled = false;
 });
 
 // ---------- business detail rail: contacts ----------
