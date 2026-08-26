@@ -491,7 +491,7 @@ button:hover { border-color: var(--accent); }
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-bottom: 20px;
+  margin-top: 20px;
 }
 
 .practice-row {
