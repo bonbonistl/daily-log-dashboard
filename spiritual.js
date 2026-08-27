@@ -358,7 +358,8 @@ function renderDisruptionList() {
 // ---------- emoji picker ----------
 // One shared popover (lazily created, reused for both the new-practice form and every
 // existing-practice row) rather than one per input, since only one can be open at a time.
-const HABIT_EMOJI_CHOICES = ["🙏", "🧘", "📖", "📓", "✍️", "💧", "🥗", "🍎", "🏃", "🚶", "💪", "🧹", "😴", "🌙", "☀️", "📵", "🎯", "🧠", "❤️", "🎵", "🚿", "🧴", "🦷", "🌿"];
+// Backed by the <emoji-picker> web component (full emoji set, categories, search) rather
+// than a hand-picked list — loaded via CDN script tag in index.html, no build step needed.
 let emojiPickerPopover = null;
 let emojiPickerTargetInput = null;
 
@@ -371,21 +372,28 @@ function openEmojiPicker(targetInput) {
   if (!emojiPickerPopover) {
     emojiPickerPopover = document.createElement("div");
     emojiPickerPopover.className = "emoji-picker-popover hidden";
-    emojiPickerPopover.innerHTML = HABIT_EMOJI_CHOICES.map((em) => `<button type="button">${em}</button>`).join("");
+    const picker = document.createElement("emoji-picker");
+    emojiPickerPopover.appendChild(picker);
     document.body.appendChild(emojiPickerPopover);
-    emojiPickerPopover.addEventListener("click", (e) => {
-      const btn = e.target.closest("button");
-      if (!btn || !emojiPickerTargetInput) return;
-      emojiPickerTargetInput.value = btn.textContent;
+    picker.addEventListener("emoji-click", (e) => {
+      if (!emojiPickerTargetInput) return;
+      emojiPickerTargetInput.value = e.detail.unicode;
       emojiPickerTargetInput.dispatchEvent(new Event("change", { bubbles: true }));
       closeEmojiPicker();
     });
   }
   emojiPickerTargetInput = targetInput;
-  const rect = targetInput.getBoundingClientRect();
-  emojiPickerPopover.style.top = `${rect.bottom + 4}px`;
-  emojiPickerPopover.style.left = `${rect.left}px`;
   emojiPickerPopover.classList.remove("hidden");
+  // Position after unhiding so the popover has real dimensions to clamp against —
+  // it's much taller/wider than the old button grid and can otherwise run off-screen.
+  const rect = targetInput.getBoundingClientRect();
+  const popRect = emojiPickerPopover.getBoundingClientRect();
+  let top = rect.bottom + 4;
+  if (top + popRect.height > window.innerHeight) top = Math.max(4, rect.top - popRect.height - 4);
+  let left = rect.left;
+  if (left + popRect.width > window.innerWidth) left = Math.max(4, window.innerWidth - popRect.width - 4);
+  emojiPickerPopover.style.top = `${top}px`;
+  emojiPickerPopover.style.left = `${left}px`;
 }
 
 document.addEventListener("click", (e) => {
@@ -467,7 +475,9 @@ document.getElementById("addPracticeForm").addEventListener("submit", async (e) 
   const emoji = emojiInput.value.trim() || null;
   if (!name) return;
   try {
-    const sortOrder = rolPractices.length ? Math.max(...rolPractices.map((p) => p.sort_order)) + 1 : 1;
+    // New practices sort first (lowest sort_order) so they show up at the top of the
+    // list, checkin groups, and breakdown chart instead of getting buried at the bottom.
+    const sortOrder = rolPractices.length ? Math.min(...rolPractices.map((p) => p.sort_order)) - 1 : 1;
     // New practices start opted out of every time slot — the person adding it picks
     // where it belongs afterward via the checkboxes, rather than it defaulting into all four.
     const { error } = await sb.from("rule_of_life_practices").insert({
