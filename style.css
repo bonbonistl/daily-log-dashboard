@@ -112,6 +112,7 @@ button:hover { border-color: var(--accent); }
 
 .cell.logged { background: var(--accent); }
 .cell.missing { background: var(--panel-border); }
+.cell.not-scheduled { background: none; border: 1px dashed var(--panel-border); }
 
 .gaps-list {
   margin-top: 16px;
@@ -540,6 +541,29 @@ button:hover { border-color: var(--accent); }
 }
 
 .practice-row .time-toggle input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.practice-row .day-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.practice-row .day-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.practice-row .day-toggle input {
   accent-color: var(--accent);
   cursor: pointer;
 }

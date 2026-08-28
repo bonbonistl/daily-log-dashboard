@@ -84,19 +84,20 @@ function renderInsightsCompare() {
   const disruptionDates = new Set(insightsDisruptions.map((d) => d.log_date));
   const disruptionDays = allDays.filter((d) => disruptionDates.has(d));
   const normalDays = allDays.filter((d) => !disruptionDates.has(d));
-  const practiceCount = insightsPractices.length || 1;
 
   function averages(days) {
     if (!days.length) return null;
-    let totalPractices = 0, totalCal = 0, totalAlcohol = 0;
+    let totalPractices = 0, totalScheduled = 0, totalCal = 0, totalAlcohol = 0;
     days.forEach((d) => {
       totalPractices += dayPracticesDone(d).size;
+      totalScheduled += insightsPractices.filter((p) => practiceAppliesOnDate(p, d)).length;
       const { cal, alcohol } = dayCaloriesAndAlcohol(d);
       totalCal += cal;
       totalAlcohol += alcohol;
     });
     return {
       practices: totalPractices / days.length,
+      scheduled: totalScheduled / days.length,
       cal: totalCal / days.length,
       alcohol: totalAlcohol / days.length,
     };
@@ -108,8 +109,8 @@ function renderInsightsCompare() {
   const rows = [
     {
       label: "Practices done / day",
-      disrupt: disruptAvg ? `${disruptAvg.practices.toFixed(1)} / ${practiceCount}` : "—",
-      normal: normalAvg ? `${normalAvg.practices.toFixed(1)} / ${practiceCount}` : "—",
+      disrupt: disruptAvg ? `${disruptAvg.practices.toFixed(1)} / ${disruptAvg.scheduled.toFixed(1)}` : "—",
+      normal: normalAvg ? `${normalAvg.practices.toFixed(1)} / ${normalAvg.scheduled.toFixed(1)}` : "—",
     },
     {
       label: "Calories / day",
@@ -153,7 +154,8 @@ function renderInsightsDetail() {
   document.getElementById("insightsDetailList").innerHTML = days.map((logDate) => {
     const causes = byDay[logDate].join(", ");
     const doneSet = dayPracticesDone(logDate);
-    const missed = insightsPractices.filter((p) => !doneSet.has(p.name)).map((p) => p.name);
+    const scheduled = insightsPractices.filter((p) => practiceAppliesOnDate(p, logDate));
+    const missed = scheduled.filter((p) => !doneSet.has(p.name)).map((p) => p.name);
     const { cal, alcohol } = dayCaloriesAndAlcohol(logDate);
     const foodItems = insightsFoodRows.filter((r) => r.log_date === logDate);
 
@@ -165,7 +167,7 @@ function renderInsightsDetail() {
         </div>
         <div class="insights-day-row">
           <span class="insights-day-label">Practices:</span>
-          ${insightsPractices.length ? `${doneSet.size}/${insightsPractices.length} done${missed.length ? ` — missed: ${missed.join(", ")}` : ""}` : "no practices configured"}
+          ${scheduled.length ? `${doneSet.size}/${scheduled.length} done${missed.length ? ` — missed: ${missed.join(", ")}` : ""}` : "no practices scheduled"}
         </div>
         <div class="insights-day-row">
           <span class="insights-day-label">Food:</span>

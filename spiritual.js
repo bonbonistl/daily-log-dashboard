@@ -1,9 +1,11 @@
 const TIMES_OF_DAY = ["Morning", "Mid Morning", "Noon", "Night"];
 const TIME_KEY = { Morning: "morning", "Mid Morning": "mid_morning", Noon: "noon", Night: "night" };
+// Index = JS Date.getDay() (0=Sun..6=Sat), matching rule_of_life_practices.days.
+const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const ROL_RANGE_DAYS = 14;
 
 let rolRows = [];
-let rolPractices = []; // [{id, name, emoji, morning, mid_morning, noon, night, sort_order}], ordered by sort_order
+let rolPractices = []; // [{id, name, emoji, morning, mid_morning, noon, night, days, sort_order}], ordered by sort_order
 let rolDisruptions = [];
 let allDisruptionCauses = []; // every cause ever logged, all-time — powers the reusable suggestion chips
 let spiritualLoadedOnce = false;
@@ -93,6 +95,10 @@ function practiceLabel(p) {
   return p.emoji ? `${p.emoji} ${p.name}` : p.name;
 }
 
+function practiceAppliesOnDate(p, dateStr) {
+  return p.days.includes(new Date(dateStr + "T00:00:00").getDay());
+}
+
 function renderCheckin() {
   const viewDate = getCheckinViewDate();
   const isToday = checkinDateOffset === 0;
@@ -103,7 +109,7 @@ function renderCheckin() {
   document.getElementById("checkinNextBtn").disabled = checkinDateOffset <= 0;
 
   const html = TIMES_OF_DAY.map((time) => {
-    const applicable = rolPractices.filter((p) => p[TIME_KEY[time]]);
+    const applicable = rolPractices.filter((p) => p[TIME_KEY[time]] && practiceAppliesOnDate(p, viewDate));
     const items = applicable.map((p) => {
       const row = findRolRow(viewDate, time, p.name);
       const checked = !!row;
@@ -167,14 +173,16 @@ document.getElementById("checkinNextBtn").addEventListener("click", () => {
 function renderRolCards(todayStr) {
   const days = rolDayRange(todayStr);
   const completeDays = days.filter((d) => d !== todayStr);
-  const practiceCount = rolPractices.length;
+  // Practices can be scoped to specific days of the week, so "how many are due" varies by day.
+  const scheduledCount = {};
+  days.forEach((d) => { scheduledCount[d] = rolPractices.filter((p) => practiceAppliesOnDate(p, d)).length; });
 
   const perDayPractices = {};
   days.forEach((d) => { perDayPractices[d] = new Set(); });
   rolRows.forEach((r) => { if (perDayPractices[r.log_date]) perDayPractices[r.log_date].add(r.practice); });
 
   const anyDay = (d) => perDayPractices[d] && perDayPractices[d].size > 0;
-  const fullDay = (d) => perDayPractices[d] && perDayPractices[d].size === practiceCount;
+  const fullDay = (d) => scheduledCount[d] > 0 && perDayPractices[d] && perDayPractices[d].size === scheduledCount[d];
 
   let currentStreak = 0;
   for (let i = completeDays.length - 1; i >= 0; i--) {
@@ -189,16 +197,16 @@ function renderRolCards(todayStr) {
   });
 
   const perfectDays = completeDays.filter(fullDay).length;
-  const totalPossible = completeDays.length * practiceCount;
+  const totalPossible = completeDays.reduce((s, d) => s + scheduledCount[d], 0);
   const totalDone = completeDays.reduce((s, d) => s + perDayPractices[d].size, 0);
   const adherencePct = totalPossible ? Math.round((totalDone / totalPossible) * 100) : 0;
   const todaySet = perDayPractices[todayStr] || new Set();
 
   const cards = [
-    { label: "Today", value: `${todaySet.size}/${practiceCount}`, sub: "practices done so far" },
+    { label: "Today", value: `${todaySet.size}/${scheduledCount[todayStr] || 0}`, sub: "practices done so far" },
     { label: "Current streak", value: `${currentStreak} day${currentStreak === 1 ? "" : "s"}`, sub: "at least one practice", cls: "streak" },
     { label: "Longest streak", value: `${longestStreak} day${longestStreak === 1 ? "" : "s"}`, sub: `out of ${completeDays.length} days`, cls: "streak" },
-    { label: "Perfect days", value: `${perfectDays}`, sub: `all ${practiceCount} practices done` },
+    { label: "Perfect days", value: `${perfectDays}`, sub: "all scheduled practices done" },
     { label: "Adherence", value: `${adherencePct}%`, sub: `last ${completeDays.length} days`, cls: adherencePct < 50 ? "warn" : "" },
   ];
 
@@ -225,6 +233,10 @@ function renderRolGrid(todayStr) {
   rolPractices.forEach((p) => {
     html += `<div class="row-label">${practiceLabel(p)}</div>`;
     days.forEach((d) => {
+      if (!practiceAppliesOnDate(p, d)) {
+        html += `<div class="cell not-scheduled" title="${p.name} on ${d}: not scheduled"></div>`;
+        return;
+      }
       const logged = doneSet.has(`${d}|${p.name}`);
       html += `<div class="cell ${logged ? "logged" : "missing"}" title="${p.name} on ${d}: ${logged ? "done" : "not done"}"></div>`;
     });
@@ -238,9 +250,10 @@ function renderRolBreakdown(todayStr) {
   const doneSet = new Set(rolRows.map((r) => `${r.log_date}|${r.practice}`));
 
   const rows = rolPractices.map((p) => {
-    const doneDays = days.filter((d) => doneSet.has(`${d}|${p.name}`)).length;
-    const pct = days.length ? Math.round((doneDays / days.length) * 100) : 0;
-    return { practice: practiceLabel(p), pct, doneDays, total: days.length };
+    const scheduledDays = days.filter((d) => practiceAppliesOnDate(p, d));
+    const doneDays = scheduledDays.filter((d) => doneSet.has(`${d}|${p.name}`)).length;
+    const pct = scheduledDays.length ? Math.round((doneDays / scheduledDays.length) * 100) : 0;
+    return { practice: practiceLabel(p), pct, doneDays, total: scheduledDays.length };
   });
 
   document.getElementById("rolBreakdown").innerHTML = rows.map((r) => `
@@ -427,15 +440,38 @@ function renderPracticesList() {
           `;
         }).join("")}
       </div>
+      <div class="day-toggles">
+        ${DAYS_OF_WEEK.map((day, i) => `
+          <label class="day-toggle">
+            <input type="checkbox" data-id="${p.id}" data-day="${i}" ${p.days.includes(i) ? "checked" : ""} />
+            ${day}
+          </label>
+        `).join("")}
+      </div>
     </div>
   `).join("");
 
-  document.querySelectorAll("#practicesList input[type=checkbox]").forEach((input) => {
+  document.querySelectorAll("#practicesList input[data-field]").forEach((input) => {
     input.addEventListener("change", async () => {
       const id = input.dataset.id;
       const field = input.dataset.field;
       input.disabled = true;
       const { error } = await sb.from("rule_of_life_practices").update({ [field]: input.checked }).eq("id", id);
+      if (error) { alert("Failed to update: " + error.message); }
+      await loadSpiritualData();
+    });
+  });
+
+  document.querySelectorAll("#practicesList input[data-day]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const id = input.dataset.id;
+      const day = Number(input.dataset.day);
+      const practice = rolPractices.find((p) => String(p.id) === id);
+      const days = input.checked
+        ? [...practice.days, day].sort((a, b) => a - b)
+        : practice.days.filter((d) => d !== day);
+      input.disabled = true;
+      const { error } = await sb.from("rule_of_life_practices").update({ days }).eq("id", id);
       if (error) { alert("Failed to update: " + error.message); }
       await loadSpiritualData();
     });
