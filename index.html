@@ -234,11 +234,33 @@
     <div id="groceriesLoading">Loading data…</div>
 
     <div class="subtabs">
-      <button class="subtab-btn active" id="cartSubtabBtn">Cart</button>
-      <button class="subtab-btn" id="inventorySubtabBtn">Inventory</button>
+      <button class="subtab-btn active" id="inventorySubtabBtn">Inventory</button>
+      <button class="subtab-btn" id="cartSubtabBtn">Cart</button>
     </div>
 
-    <div id="groceriesCart" class="subtab-content">
+    <div id="groceriesInventory" class="subtab-content">
+      <section class="panel hidden" id="inventoryPanel">
+        <h2>Inventory <span class="hint">what's actually on hand right now</span></h2>
+        <form id="addInventoryForm" class="plan-add-form">
+          <input type="text" id="newInventoryName" placeholder="Item name" maxlength="200" required />
+          <select id="newInventoryFunction"></select>
+          <input type="number" id="newInventoryQty" placeholder="qty" min="1" step="1" value="1" required />
+          <button type="submit">Add</button>
+        </form>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Quantity</th>
+              <th>Function</th>
+            </tr>
+          </thead>
+          <tbody id="inventoryTableBody"></tbody>
+        </table>
+      </section>
+    </div>
+
+    <div id="groceriesCart" class="subtab-content hidden">
       <section class="panel hidden" id="groceriesPanel">
         <div class="panel-heading-row">
           <h2 id="groceriesHeading">Cart</h2>
@@ -250,19 +272,6 @@
         <p class="hint drawer-hint">Shows what's in the Instacart cart as of the last sync — ask Claude to "sync my cart" to pull the latest. Once the order shows up, mark it received to move everything into Inventory.</p>
         <div id="groceriesCards" class="cards"></div>
         <div id="groceriesGroups" class="checkin-groups"></div>
-      </section>
-    </div>
-
-    <div id="groceriesInventory" class="subtab-content hidden">
-      <section class="panel hidden" id="inventoryPanel">
-        <h2>Inventory <span class="hint">what's actually on hand right now</span></h2>
-        <form id="addInventoryForm" class="plan-add-form">
-          <input type="text" id="newInventoryName" placeholder="Item name" maxlength="200" required />
-          <select id="newInventoryFunction"></select>
-          <input type="number" id="newInventoryQty" placeholder="qty" min="1" step="1" value="1" required />
-          <button type="submit">Add</button>
-        </form>
-        <div id="inventoryGroups" class="checkin-groups"></div>
       </section>
     </div>
   </main>

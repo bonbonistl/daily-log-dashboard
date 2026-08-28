@@ -186,39 +186,37 @@ document.getElementById("markReceivedBtn").addEventListener("click", markOrderRe
 function renderInventory() {
   document.getElementById("newInventoryFunction").innerHTML = functionSelectHtml("");
 
-  const groupsEl = document.getElementById("inventoryGroups");
+  const bodyEl = document.getElementById("inventoryTableBody");
   if (!groceryInventory.length) {
-    groupsEl.innerHTML = `<div class="journal-empty">Nothing in inventory yet — mark a received order, or add something below.</div>`;
+    bodyEl.innerHTML = `<tr><td colspan="3" class="journal-empty">Nothing in inventory yet — mark a received order, or add something below.</td></tr>`;
     return;
   }
 
-  groupsEl.innerHTML = groupByFunction(groceryInventory).map(({ groupName, rows }) => `
-    <div class="checkin-group">
-      <h3>${groupName}</h3>
-      <div class="rol-checklist">${rows.map((r) => `
-        <div class="plan-item" data-item-id="${r.item.id}" data-inventory-id="${r.id}">
-          <label>
-            <span>${r.item.name}</span>
-          </label>
+  bodyEl.innerHTML = groupByFunction(groceryInventory).map(({ groupName, rows }) => `
+    <tr class="table-section-row"><td colspan="3">${groupName}</td></tr>
+    ${rows.map((r) => `
+      <tr data-item-id="${r.item.id}" data-inventory-id="${r.id}">
+        <td>${r.item.name}</td>
+        <td>
           <div class="qty-stepper">
             <button type="button" class="qty-btn" data-delta="-1" aria-label="Decrease quantity">&minus;</button>
             <span class="qty-value">${r.quantity}</span>
             <button type="button" class="qty-btn" data-delta="1" aria-label="Increase quantity">+</button>
           </div>
-          <select class="grocery-function-select">${functionSelectHtml(r.item.function)}</select>
-        </div>
-      `).join("")}</div>
-    </div>
+        </td>
+        <td><select class="grocery-function-select">${functionSelectHtml(r.item.function)}</select></td>
+      </tr>
+    `).join("")}
   `).join("");
 
   bindFunctionSelects();
-  document.querySelectorAll("#inventoryGroups .qty-btn").forEach((btn) => {
+  document.querySelectorAll("#inventoryTableBody .qty-btn").forEach((btn) => {
     btn.addEventListener("click", () => adjustInventoryQty(btn));
   });
 }
 
 async function adjustInventoryQty(btn) {
-  const row = btn.closest(".plan-item");
+  const row = btn.closest("tr");
   if (row.dataset.busy) return;
   row.dataset.busy = "1";
   const invId = row.dataset.inventoryId;

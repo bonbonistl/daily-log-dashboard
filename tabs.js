@@ -21,7 +21,7 @@ let paperLoaded = false;
 // Which subtab is current within a top tab that has subtabs — tracked so the
 // hash can be rebuilt (e.g. "#groceries/inventory") whenever either level changes.
 let currentHealthSubtab = "overview";
-let currentGroceriesSubtab = "cart";
+let currentGroceriesSubtab = "inventory";
 
 function activateTab(key) {
   TOP_TABS.forEach((t) => {
@@ -85,8 +85,8 @@ HEALTH_SUBTABS.forEach((t) => {
 
 // ---------- groceries sub-tabs ----------
 const GROCERIES_SUBTABS = [
-  { key: "cart", btnId: "cartSubtabBtn", contentId: "groceriesCart" },
   { key: "inventory", btnId: "inventorySubtabBtn", contentId: "groceriesInventory" },
+  { key: "cart", btnId: "cartSubtabBtn", contentId: "groceriesCart" },
 ];
 
 function activateGroceriesSubtab(key) {
@@ -131,7 +131,7 @@ function applyRouteFromHash() {
     const validSub = HEALTH_SUBTABS.some((t) => t.key === subKey) ? subKey : "overview";
     activateHealthSubtab(validSub);
   } else if (validTop === "groceries") {
-    const validSub = GROCERIES_SUBTABS.some((t) => t.key === subKey) ? subKey : "cart";
+    const validSub = GROCERIES_SUBTABS.some((t) => t.key === subKey) ? subKey : "inventory";
     activateGroceriesSubtab(validSub);
   }
 }

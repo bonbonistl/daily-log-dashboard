@@ -1131,6 +1131,16 @@ button:hover { border-color: var(--accent); }
   cursor: pointer;
 }
 
+.table-section-row td {
+  padding: 16px 10px 6px 10px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--panel-border);
+}
+.table-section-row:first-child td { padding-top: 12px; }
+
 .job-table-empty { color: var(--muted); font-size: 12px; }
 .job-table-actions { text-align: right; white-space: nowrap; }
 .job-table-pmf { text-align: center; }
