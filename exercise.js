@@ -34,11 +34,12 @@ const EX_TYPE_COLORS = { Walk: "#4fd1c5", Cycling: "#63b3ed", Strength: "#f6ad55
 
 function enrichExerciseRow(r) {
   const text = r.details || "";
+  const calRaw = numOrNull(r.calories) ?? parseCalories(text);
   return {
     ...r,
     type: classifyExerciseType(text),
     min: numOrNull(r.duration_min) ?? parseMinutes(text),
-    cal: numOrNull(r.calories) ?? parseCalories(text),
+    cal: calRaw != null ? Math.abs(calRaw) : null,
     mi: parseDistanceMi(text),
   };
 }

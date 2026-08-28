@@ -277,11 +277,14 @@ function render(rows) {
       day.exCount++;
       // Prefer real logged columns (duration_min/calories/avg_hr/max_hr) over
       // regex-parsed note text — manual entries populate these directly.
+      // Calories burned should always be a positive magnitude — guard against
+      // a stray negative value in the data (e.g. bad chat-log entry) throwing
+      // off "net = gross - exercise" downstream.
       const cal = numOrNull(r.calories) ?? parseCalories(text);
       const min = numOrNull(r.duration_min) ?? parseMinutes(text);
       const avgHr = numOrNull(r.avg_hr) ?? parseAvgHR(text);
       const maxHr = numOrNull(r.max_hr) ?? parseMaxHR(text);
-      if (cal != null) day.exCal += cal;
+      if (cal != null) day.exCal += Math.abs(cal);
       if (min != null) day.exMin += min;
       if (avgHr != null) { day.exAvgHrSum += avgHr; day.exAvgHrN++; }
       if (maxHr != null) day.exMaxHr = Math.max(day.exMaxHr ?? 0, maxHr);
@@ -639,7 +642,8 @@ function categoryValue(r, text) {
     return { cal, prot, isDrink: isDrinkOnly(text) };
   }
   if (r.category === "Exercise") {
-    const cal = numOrNull(r.calories) ?? parseCalories(text);
+    const calRaw = numOrNull(r.calories) ?? parseCalories(text);
+    const cal = calRaw != null ? Math.abs(calRaw) : null;
     const min = numOrNull(r.duration_min) ?? parseMinutes(text);
     return { cal, min };
   }
