@@ -2,6 +2,7 @@ const PLAN_TIME_SLOTS = ["Morning", "Midday", "Afternoon", "Evening"];
 
 let planRows = [];
 let actualLogRows = []; // today's real daily_log Food & Drink rows, for the forecast cards
+let actualExerciseRows = []; // today's real daily_log Exercise rows, for net-calorie forecast
 let planViewDate = todayLocalStr();
 let planLoadedOnce = false;
 
@@ -16,7 +17,7 @@ async function renderFoodPlanDeepDive() {
     document.getElementById("planPanel").classList.add("hidden");
   }
 
-  const [planRes, logRes] = await Promise.all([
+  const [planRes, logRes, exRes] = await Promise.all([
     sb.from("food_plan").select("*")
       .eq("log_date", planViewDate)
       .order("id", { ascending: true }),
@@ -25,9 +26,14 @@ async function renderFoodPlanDeepDive() {
     sb.from("daily_log").select("calories, protein_g, est_calories, est_protein_g, details")
       .eq("log_date", planViewDate)
       .eq("category", "Food & Drink"),
+    // Real exercise entries for the day, so the net-calorie forecast can subtract
+    // calories actually burned (exercise isn't planned on this tab, only logged).
+    sb.from("daily_log").select("calories, details")
+      .eq("log_date", planViewDate)
+      .eq("category", "Exercise"),
   ]);
 
-  const error = planRes.error || logRes.error;
+  const error = planRes.error || logRes.error || exRes.error;
   if (error) {
     document.getElementById("planLoading").textContent = "Error loading data: " + error.message;
     document.getElementById("planLoading").classList.remove("hidden");
@@ -39,6 +45,7 @@ async function renderFoodPlanDeepDive() {
   planLoadedOnce = true;
   planRows = planRes.data;
   actualLogRows = logRes.data;
+  actualExerciseRows = exRes.data;
   renderPlan();
 }
 
@@ -108,10 +115,21 @@ function renderPlanCards() {
   const forecastCal = actualCal + remainingCal;
   const forecastProtein = actualProtein + remainingProtein;
 
+  // Net calories = gross forecasted calories minus calories actually burned from exercise.
+  // Exercise isn't planned on this tab (only logged), so this uses today's real exercise
+  // entries only — same "gross - exercise" math and negative-value guard as the Today card
+  // on the Overview tab (see renderToday in app.js).
+  const exCal = actualExerciseRows.reduce((s, r) => s + Math.abs(numOrNull(r.calories) ?? parseCalories(r.details || "") ?? 0), 0);
+  const forecastNetCal = forecastCal - exCal;
+
   cardsEl.innerHTML = [
     {
-      label: "Forecasted Calories", value: `${Math.round(forecastCal)}`,
+      label: "Forecasted Gross Calories", value: `${Math.round(forecastCal)}`,
       sub: `${Math.round(actualCal)} eaten so far + ${Math.round(remainingCal)} left on plan`,
+    },
+    {
+      label: "Forecasted Net Calories", value: `${Math.round(forecastNetCal)}`,
+      sub: `${Math.round(forecastCal)} gross − ${Math.round(exCal)} burned`,
     },
     {
       label: "Forecasted Protein", value: `${Math.round(forecastProtein)}g`,
