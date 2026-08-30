@@ -2,6 +2,7 @@ const healthControls = document.getElementById("healthControls");
 
 // ---------- top-level tabs ----------
 const TOP_TABS = [
+  { key: "home", btnId: "homeTabBtn", contentId: "homeApp" },
   { key: "health", btnId: "healthTabBtn", contentId: "app" },
   { key: "spiritual", btnId: "spiritualTabBtn", contentId: "spiritualApp" },
   { key: "insights", btnId: "insightsTabBtn", contentId: "insightsApp" },
@@ -11,6 +12,7 @@ const TOP_TABS = [
   { key: "paper", btnId: "paperTabBtn", contentId: "paperApp" },
 ];
 
+let homeLoaded = false;
 let spiritualLoaded = false;
 let insightsLoaded = false;
 let groceriesLoaded = false;
@@ -22,6 +24,7 @@ let paperLoaded = false;
 // hash can be rebuilt (e.g. "#groceries/inventory") whenever either level changes.
 let currentHealthSubtab = "overview";
 let currentGroceriesSubtab = "inventory";
+let currentHomeSubtab = "frametv";
 
 function activateTab(key) {
   TOP_TABS.forEach((t) => {
@@ -30,6 +33,10 @@ function activateTab(key) {
   });
   healthControls.classList.toggle("hidden", key !== "health");
 
+  if (key === "home" && !homeLoaded) {
+    homeLoaded = true;
+    loadFrameTVData();
+  }
   if (key === "spiritual" && !spiritualLoaded) {
     spiritualLoaded = true;
     loadSpiritualData();
@@ -102,6 +109,24 @@ GROCERIES_SUBTABS.forEach((t) => {
   document.getElementById(t.btnId).addEventListener("click", () => activateGroceriesSubtab(t.key));
 });
 
+// ---------- home sub-tabs ----------
+const HOME_SUBTABS = [
+  { key: "frametv", btnId: "frametvSubtabBtn", contentId: "homeFrameTV" },
+];
+
+function activateHomeSubtab(key) {
+  HOME_SUBTABS.forEach((t) => {
+    document.getElementById(t.btnId).classList.toggle("active", t.key === key);
+    document.getElementById(t.contentId).classList.toggle("hidden", t.key !== key);
+  });
+  currentHomeSubtab = key;
+  updateUrlHash();
+}
+
+HOME_SUBTABS.forEach((t) => {
+  document.getElementById(t.btnId).addEventListener("click", () => activateHomeSubtab(t.key));
+});
+
 // ---------- URL routing ----------
 // Hash-based (not the History API's pushState) since the app is served as a
 // static file with no server-side route fallback — a real path like /crm
@@ -109,7 +134,7 @@ GROCERIES_SUBTABS.forEach((t) => {
 function updateUrlHash() {
   const activeTop = TOP_TABS.find((t) => document.getElementById(t.btnId).classList.contains("active"));
   if (!activeTop) return;
-  const sub = activeTop.key === "health" ? currentHealthSubtab : activeTop.key === "groceries" ? currentGroceriesSubtab : null;
+  const sub = activeTop.key === "health" ? currentHealthSubtab : activeTop.key === "groceries" ? currentGroceriesSubtab : activeTop.key === "home" ? currentHomeSubtab : null;
   const next = "#" + (sub ? `${activeTop.key}/${sub}` : activeTop.key);
   if (location.hash !== next) history.replaceState(null, "", next);
 }
@@ -133,6 +158,9 @@ function applyRouteFromHash() {
   } else if (validTop === "groceries") {
     const validSub = GROCERIES_SUBTABS.some((t) => t.key === subKey) ? subKey : "inventory";
     activateGroceriesSubtab(validSub);
+  } else if (validTop === "home") {
+    const validSub = HOME_SUBTABS.some((t) => t.key === subKey) ? subKey : "frametv";
+    activateHomeSubtab(validSub);
   }
 }
 

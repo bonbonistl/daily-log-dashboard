@@ -23,6 +23,7 @@
   <header>
     <h1>LifeOS</h1>
     <div class="tabs">
+      <button class="tab-btn" id="homeTabBtn" data-tab="home">House</button>
       <button class="tab-btn active" id="healthTabBtn" data-tab="health">Health</button>
       <button class="tab-btn" id="spiritualTabBtn" data-tab="spiritual">Habits</button>
       <button class="tab-btn" id="insightsTabBtn" data-tab="insights">Insights</button>
@@ -51,6 +52,58 @@
       <button id="signOutBtn">Sign out</button>
     </div>
   </header>
+
+  <main id="homeApp" class="tab-content hidden">
+    <div class="subtabs">
+      <button class="subtab-btn active" id="frametvSubtabBtn">FrameTV</button>
+    </div>
+
+    <div id="homeFrameTV" class="subtab-content">
+      <section class="panel" id="frametvSettingsPanel">
+        <div class="panel-heading-row">
+          <h2>Frame TV <span class="hint" id="frametvStatus">Not connected</span></h2>
+        </div>
+        <p class="hint drawer-hint">
+          First-time setup: find your TV's IP under Settings &gt; General &gt; Network &gt; Network Status on the TV
+          (or check your router's connected-devices list). Then visit
+          <a href="#" id="frametvTrustCertLink" target="_blank" rel="noopener noreferrer">https://&lt;tv-ip&gt;:8002</a>
+          once in this browser and click through the certificate warning — the TV's cert is self-signed.
+          Finally click Connect below and accept the pairing prompt on the TV using your remote.
+        </p>
+        <form id="frametvSettingsForm" class="plan-add-form">
+          <input type="text" id="frametvIp" placeholder="TV IP, e.g. 192.168.1.50" maxlength="100" required />
+          <input type="number" id="frametvPort" placeholder="Port" value="8002" min="1" max="65535" required />
+          <button type="submit" id="frametvConnectBtn">Save &amp; Connect</button>
+        </form>
+      </section>
+
+      <section class="panel" id="frametvArtPanel">
+        <div class="panel-heading-row">
+          <h2>Browse Art</h2>
+        </div>
+        <form id="frametvSearchForm" class="plan-add-form">
+          <input type="text" id="frametvSearchInput" placeholder="Search public art collections…" maxlength="200" />
+          <button type="submit">Search</button>
+        </form>
+        <div class="table-filter-row">
+          <label class="table-filter-checkbox"><input type="checkbox" id="frametvSourceArtic" checked /> Art Institute of Chicago</label>
+          <label class="table-filter-checkbox"><input type="checkbox" id="frametvSourceMet" checked /> The Met</label>
+          <label class="table-filter-checkbox"><input type="checkbox" id="frametvSourceCleveland" checked /> Cleveland Museum of Art</label>
+        </div>
+        <div id="frametvArtStatus" class="hint"></div>
+        <div id="frametvArtGrid" class="art-grid"></div>
+      </section>
+    </div>
+  </main>
+
+  <div id="frametvBackdrop" class="journal-backdrop"></div>
+  <aside id="frametvDrawer" class="journal-drawer">
+    <div class="journal-header">
+      <h2 id="frametvDrawerTitle">Artwork</h2>
+      <button id="frametvDrawerCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <div id="frametvDrawerBody" class="detail-form"></div>
+  </aside>
 
   <main id="app" class="tab-content">
     <div class="subtabs">
@@ -497,6 +550,7 @@
   <script src="businesses.js"></script>
   <script src="crm.js"></script>
   <script src="paper.js"></script>
+  <script src="frametv.js"></script>
   <script src="tabs.js"></script>
   <script src="auth.js"></script>
 </body>
