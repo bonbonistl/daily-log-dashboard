@@ -645,7 +645,16 @@ async function sendFrameTVArt(art) {
   btn.disabled = true;
   statusEl.textContent = "Fetching image…";
   try {
-    const imgRes = await fetch(art.imageUrl);
+    let imgRes;
+    try {
+      imgRes = await fetch(art.imageUrl);
+    } catch {
+      // fetch() throws an opaque "Failed to fetch" for CORS-blocked requests
+      // with no way to confirm the cause client-side — but some sources
+      // (Cleveland) are known not to send CORS headers on their image CDN,
+      // so images display fine via <img> but can't be downloaded for upload.
+      throw new Error(`Couldn't download this image from ${art.source} for uploading — their server doesn't allow browser downloads of it. Try a piece from The Met instead, which reliably works.`);
+    }
     if (!imgRes.ok) throw new Error("Couldn't download that image from its source.");
     const contentType = imgRes.headers.get("content-type") || "";
     const fileType = contentType.includes("png") ? "png" : "jpg";
