@@ -521,6 +521,11 @@ function updateFrameTVArtStatusCount(count) {
   document.getElementById(id).addEventListener("change", () => loadFrameTVArt());
 });
 
+document.getElementById("frametvFitOnlyFilter").addEventListener("change", () => {
+  renderFrameTVArtGrid();
+  updateFrameTVArtStatusCount(getFilteredFrameTVResults().length);
+});
+
 // ---------- category facets ----------
 // Frame TVs are a fixed 16:9 (~1.78) panel — a piece with a landscape image
 // close to that ratio needs little to no cropping/matting to fill the
@@ -539,7 +544,16 @@ function frameTVFitTier(ratio) {
 const FRAMETV_FIT_RANK = { great: 0, good: 1 };
 
 function getFilteredFrameTVResults() {
-  const filtered = frameTVArtResults.filter((a) => frameTVCategoryFilter.has(a.category));
+  const fitOnly = document.getElementById("frametvFitOnlyFilter").checked;
+  const filtered = frameTVArtResults.filter((a) => {
+    if (!frameTVCategoryFilter.has(a.category)) return false;
+    // a.fitTier is undefined until the image has loaded and its aspect
+    // ratio is measured — leave those in so the grid isn't empty while
+    // images are still loading; only exclude ones confirmed to be a poor
+    // fit (fitTier === null, as opposed to not-yet-known).
+    if (fitOnly && a.fitTier === null) return false;
+    return true;
+  });
   return filtered.sort((a, b) => (FRAMETV_FIT_RANK[a.fitTier] ?? 2) - (FRAMETV_FIT_RANK[b.fitTier] ?? 2));
 }
 
@@ -634,6 +648,13 @@ function renderFrameTVArtGrid() {
       const art = frameTVArtResults.find((a) => a.key === card.dataset.artKey);
       if (!art) return;
       art.fitTier = frameTVFitTier(img.naturalWidth / img.naturalHeight);
+
+      if (art.fitTier === null && document.getElementById("frametvFitOnlyFilter").checked) {
+        card.remove();
+        updateFrameTVArtStatusCount(getFilteredFrameTVResults().length);
+        return;
+      }
+
       if (art.fitTier === "great" && !card.querySelector(".art-fit-badge")) {
         const badge = document.createElement("span");
         badge.className = "art-fit-badge";
