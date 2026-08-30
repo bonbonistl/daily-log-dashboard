@@ -415,8 +415,20 @@ async function loadFrameTVArt() {
     statusEl.textContent = "No public-domain images found — try a different search.";
     return;
   }
-  statusEl.textContent = `${results.length} result${results.length === 1 ? "" : "s"}`;
+  updateFrameTVArtStatusCount(results.length);
   renderFrameTVArtGrid();
+}
+
+// Some source CDNs intermittently block hotlinked images (the Art Institute
+// of Chicago's currently 403s on every request via Cloudflare bot
+// protection, a known outage on their end — see
+// https://github.com/lovasoa/dezoomify/issues/911). Rather than show broken
+// image icons, drop those cards and keep the visible count honest.
+function updateFrameTVArtStatusCount(count) {
+  const statusEl = document.getElementById("frametvArtStatus");
+  statusEl.textContent = count
+    ? `${count} result${count === 1 ? "" : "s"}`
+    : "No images could be loaded — try a different search or source.";
 }
 
 ["frametvSourceArtic", "frametvSourceMet", "frametvSourceCleveland"].forEach((id) => {
@@ -438,6 +450,11 @@ function renderFrameTVArtGrid() {
 
   gridEl.querySelectorAll(".art-card").forEach((card) => {
     card.addEventListener("click", () => openFrameTVDrawer(card.dataset.artKey));
+    card.querySelector("img").addEventListener("error", () => {
+      frameTVArtResults = frameTVArtResults.filter((a) => a.key !== card.dataset.artKey);
+      card.remove();
+      updateFrameTVArtStatusCount(frameTVArtResults.length);
+    }, { once: true });
   });
 }
 
