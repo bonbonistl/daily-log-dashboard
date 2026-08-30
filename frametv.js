@@ -522,8 +522,44 @@ function updateFrameTVArtStatusCount(count) {
 });
 
 // ---------- category facets ----------
+// Frame TVs are a fixed 16:9 (~1.78) panel — a piece with a landscape image
+// close to that ratio needs little to no cropping/matting to fill the
+// screen well; portrait or square pieces need heavy cropping or a large
+// mat. `fitTier` is set once the actual image dimensions are known (source
+// APIs don't reliably expose pixel dimensions up front, so this is measured
+// from the loaded <img> itself — see the "load" listener in
+// renderFrameTVArtGrid).
+function frameTVFitTier(ratio) {
+  if (!ratio || !isFinite(ratio)) return null;
+  if (ratio >= 1.55 && ratio <= 2.05) return "great";
+  if (ratio >= 1.15 && ratio <= 2.6) return "good";
+  return null;
+}
+
+const FRAMETV_FIT_RANK = { great: 0, good: 1 };
+
 function getFilteredFrameTVResults() {
-  return frameTVArtResults.filter((a) => frameTVCategoryFilter.has(a.category));
+  const filtered = frameTVArtResults.filter((a) => frameTVCategoryFilter.has(a.category));
+  return filtered.sort((a, b) => (FRAMETV_FIT_RANK[a.fitTier] ?? 2) - (FRAMETV_FIT_RANK[b.fitTier] ?? 2));
+}
+
+// Reorders already-rendered cards in place (moving existing DOM nodes, not
+// rebuilding them) as more images finish loading and report their fit tier.
+// Rebuilding the grid's innerHTML instead would recreate every <img>, which
+// re-fires "load" for cards that already loaded and re-triggers this same
+// resort — a feedback loop. Moving nodes via appendChild doesn't re-fetch or
+// reload them, so it's safe to call repeatedly.
+let frameTVFitResortTimer = null;
+function scheduleFrameTVFitResort() {
+  clearTimeout(frameTVFitResortTimer);
+  frameTVFitResortTimer = setTimeout(() => {
+    const gridEl = document.getElementById("frametvArtGrid");
+    const cardsByKey = new Map([...gridEl.children].map((el) => [el.dataset.artKey, el]));
+    getFilteredFrameTVResults().forEach((a) => {
+      const card = cardsByKey.get(a.key);
+      if (card) gridEl.appendChild(card);
+    });
+  }, 500);
 }
 
 // Broken thumbnails get pruned from frameTVArtResults one at a time as each
@@ -585,11 +621,26 @@ function renderFrameTVArtGrid() {
 
   gridEl.querySelectorAll(".art-card").forEach((card) => {
     card.addEventListener("click", () => openFrameTVDrawer(card.dataset.artKey));
-    card.querySelector("img").addEventListener("error", () => {
+    const img = card.querySelector("img");
+
+    img.addEventListener("error", () => {
       frameTVArtResults = frameTVArtResults.filter((a) => a.key !== card.dataset.artKey);
       card.remove();
       scheduleFrameTVFacetRefresh();
       updateFrameTVArtStatusCount(getFilteredFrameTVResults().length);
+    }, { once: true });
+
+    img.addEventListener("load", () => {
+      const art = frameTVArtResults.find((a) => a.key === card.dataset.artKey);
+      if (!art) return;
+      art.fitTier = frameTVFitTier(img.naturalWidth / img.naturalHeight);
+      if (art.fitTier === "great" && !card.querySelector(".art-fit-badge")) {
+        const badge = document.createElement("span");
+        badge.className = "art-fit-badge";
+        badge.textContent = "Fits your TV";
+        card.appendChild(badge);
+      }
+      scheduleFrameTVFitResort();
     }, { once: true });
   });
 }

@@ -1283,6 +1283,7 @@ button:hover { border-color: var(--accent); }
 }
 
 .art-card {
+  position: relative;
   background: var(--bg);
   border: 1px solid var(--panel-border);
   border-radius: 8px;
@@ -1291,6 +1292,21 @@ button:hover { border-color: var(--accent); }
   transition: border-color 0.15s;
 }
 .art-card:hover { border-color: var(--accent); }
+
+.art-fit-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
 
 .art-card img {
   width: 100%;
