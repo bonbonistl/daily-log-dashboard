@@ -213,11 +213,19 @@ class FrameTVClient {
 }
 
 // ---------- public art API sources ----------
-async function fetchArticArt(query) {
+// Each source is fetched a page at a time (FRAMETV_PAGE_SIZE per page) so
+// "Load more" can pull in additional results without re-fetching what's
+// already showing. `category` is normalized from each API's own type/medium
+// field (all three happen to use plain English terms like "Painting"), which
+// powers the category facet sidebar.
+const FRAMETV_PAGE_SIZE = 24;
+
+async function fetchArticPage(query, page) {
   const params = new URLSearchParams({
     q: query || "painting",
-    fields: "id,title,artist_display,image_id",
-    limit: "16",
+    fields: "id,title,artist_display,image_id,artwork_type_title",
+    limit: String(FRAMETV_PAGE_SIZE),
+    page: String(page),
   });
   const res = await fetch(`https://api.artic.edu/api/v1/artworks/search?${params}`);
   if (!res.ok) throw new Error("Art Institute of Chicago search failed.");
@@ -227,6 +235,7 @@ async function fetchArticArt(query) {
     .map((a) => ({
       key: `artic:${a.id}`,
       source: "Art Institute of Chicago",
+      category: a.artwork_type_title || "Other",
       title: a.title || "Untitled",
       artist: a.artist_display || "Unknown artist",
       thumbUrl: `https://www.artic.edu/iiif/2/${a.image_id}/full/400,/0/default.jpg`,
@@ -235,12 +244,19 @@ async function fetchArticArt(query) {
     }));
 }
 
-async function fetchMetArt(query) {
+// The Met's search endpoint returns every matching object id at once (no
+// paging), so we fetch a large id list once per search and page through it
+// locally, doing a detail fetch (which is where image/title/etc. live) only
+// for the ids in the current window.
+async function fetchMetArtIds(query) {
   const searchParams = new URLSearchParams({ q: query || "painting", hasImages: "true" });
-  const searchRes = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?${searchParams}`);
-  if (!searchRes.ok) throw new Error("The Met search failed.");
-  const searchJson = await searchRes.json();
-  const ids = (searchJson.objectIDs || []).slice(0, 16);
+  const res = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?${searchParams}`);
+  if (!res.ok) throw new Error("The Met search failed.");
+  const json = await res.json();
+  return (json.objectIDs || []).slice(0, 200);
+}
+
+async function fetchMetArtDetails(ids) {
   const objects = await Promise.all(
     ids.map((id) =>
       fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`)
@@ -253,6 +269,7 @@ async function fetchMetArt(query) {
     .map((o) => ({
       key: `met:${o.objectID}`,
       source: "The Met",
+      category: o.objectName || "Other",
       title: o.title || "Untitled",
       artist: o.artistDisplayName || "Unknown artist",
       thumbUrl: o.primaryImageSmall,
@@ -261,8 +278,8 @@ async function fetchMetArt(query) {
     }));
 }
 
-async function fetchClevelandArt(query) {
-  const params = new URLSearchParams({ q: query || "painting", has_image: "1", limit: "16" });
+async function fetchClevelandPage(query, skip) {
+  const params = new URLSearchParams({ q: query || "painting", has_image: "1", limit: String(FRAMETV_PAGE_SIZE), skip: String(skip) });
   const res = await fetch(`https://openaccess-api.clevelandart.org/api/artworks/?${params}`);
   if (!res.ok) throw new Error("Cleveland Museum of Art search failed.");
   const json = await res.json();
@@ -271,6 +288,7 @@ async function fetchClevelandArt(query) {
     .map((a) => ({
       key: `cma:${a.id}`,
       source: "Cleveland Museum of Art",
+      category: a.type || "Other",
       title: a.title || "Untitled",
       artist: (a.creators && a.creators[0] && a.creators[0].description) || "Unknown artist",
       thumbUrl: (a.images.web && a.images.web.url) || a.images.print.url,
@@ -284,6 +302,9 @@ let frameTVClient = null;
 let frameTVLoadedOnce = false;
 let frameTVSettingsRow = null; // { id, tv_ip, tv_port, token }
 let frameTVArtResults = [];
+let frameTVCategoryFilter = new Set(); // categories currently checked in the sidebar
+let frameTVKnownCategories = new Set(); // categories seen so far this search, so new ones default to checked without re-checking ones the user unchecked
+let frameTVPaging = { query: null, articPage: 0, clevelandSkip: 0, metIds: [], metOffset: 0 };
 let frameTVMatteOptions = [
   { matte_id: "none", matte_type: "None" },
   { matte_id: "shadowbox_polar", matte_type: "Shadowbox (Polar)" },
@@ -389,35 +410,97 @@ document.getElementById("frametvSearchForm").addEventListener("submit", (e) => {
   loadFrameTVArt();
 });
 
+function frameTVEnabledSources() {
+  return {
+    artic: document.getElementById("frametvSourceArtic").checked,
+    met: document.getElementById("frametvSourceMet").checked,
+    cleveland: document.getElementById("frametvSourceCleveland").checked,
+  };
+}
+
+// Fetches the next page from each enabled source given the current
+// frameTVPaging cursors, advancing those cursors as it goes. `freshMet`
+// re-runs the Met id search (only needed on a brand new search, not a
+// "load more") since the Met id list is paged through locally afterward.
+async function fetchFrameTVBatch(query, sources, { freshMet }) {
+  const fetchers = [];
+  if (sources.artic) {
+    frameTVPaging.articPage += 1;
+    fetchers.push(fetchArticPage(query, frameTVPaging.articPage).catch((e) => { console.error(e); return []; }));
+  }
+  if (sources.met) {
+    fetchers.push((async () => {
+      if (freshMet) {
+        frameTVPaging.metIds = await fetchMetArtIds(query).catch(() => []);
+        frameTVPaging.metOffset = 0;
+      }
+      const batch = frameTVPaging.metIds.slice(frameTVPaging.metOffset, frameTVPaging.metOffset + FRAMETV_PAGE_SIZE);
+      frameTVPaging.metOffset += FRAMETV_PAGE_SIZE;
+      return fetchMetArtDetails(batch).catch((e) => { console.error(e); return []; });
+    })());
+  }
+  if (sources.cleveland) {
+    fetchers.push(fetchClevelandPage(query, frameTVPaging.clevelandSkip).catch((e) => { console.error(e); return []; }));
+    frameTVPaging.clevelandSkip += FRAMETV_PAGE_SIZE;
+  }
+  return (await Promise.all(fetchers)).flat();
+}
+
 async function loadFrameTVArt() {
   const query = document.getElementById("frametvSearchInput").value.trim();
   const statusEl = document.getElementById("frametvArtStatus");
   const gridEl = document.getElementById("frametvArtGrid");
+  const loadMoreBtn = document.getElementById("frametvLoadMoreBtn");
+  const sources = frameTVEnabledSources();
 
-  const fetchers = [];
-  if (document.getElementById("frametvSourceArtic").checked) fetchers.push(fetchArticArt(query).catch((e) => { console.error(e); return []; }));
-  if (document.getElementById("frametvSourceMet").checked) fetchers.push(fetchMetArt(query).catch((e) => { console.error(e); return []; }));
-  if (document.getElementById("frametvSourceCleveland").checked) fetchers.push(fetchClevelandArt(query).catch((e) => { console.error(e); return []; }));
-
-  if (!fetchers.length) {
+  if (!sources.artic && !sources.met && !sources.cleveland) {
     statusEl.textContent = "Select at least one source.";
     gridEl.innerHTML = "";
+    loadMoreBtn.classList.add("hidden");
     return;
   }
 
   statusEl.textContent = "Searching…";
   gridEl.innerHTML = "";
+  frameTVArtResults = [];
+  frameTVCategoryFilter = new Set();
+  frameTVKnownCategories = new Set();
+  frameTVPaging = { query, articPage: 0, clevelandSkip: 0, metIds: [], metOffset: 0 };
 
-  const results = (await Promise.all(fetchers)).flat();
-  frameTVArtResults = results;
+  frameTVArtResults = await fetchFrameTVBatch(query, sources, { freshMet: true });
 
-  if (!results.length) {
+  if (!frameTVArtResults.length) {
     statusEl.textContent = "No public-domain images found — try a different search.";
+    document.getElementById("frametvCategoryFacets").innerHTML = "";
+    loadMoreBtn.classList.add("hidden");
     return;
   }
-  updateFrameTVArtStatusCount(results.length);
+  renderFrameTVCategoryFacets();
   renderFrameTVArtGrid();
+  updateFrameTVArtStatusCount(getFilteredFrameTVResults().length);
+  loadMoreBtn.classList.remove("hidden");
 }
+
+async function loadMoreFrameTVArt() {
+  const btn = document.getElementById("frametvLoadMoreBtn");
+  if (btn.disabled) return; // guard against duplicate/rapid-repeat clicks firing a second fetch
+  const sources = frameTVEnabledSources();
+  btn.disabled = true;
+  btn.textContent = "Loading…";
+  try {
+    const more = await fetchFrameTVBatch(frameTVPaging.query, sources, { freshMet: false });
+    const existingKeys = new Set(frameTVArtResults.map((a) => a.key));
+    frameTVArtResults = frameTVArtResults.concat(more.filter((a) => !existingKeys.has(a.key)));
+    renderFrameTVCategoryFacets();
+    renderFrameTVArtGrid();
+    updateFrameTVArtStatusCount(getFilteredFrameTVResults().length);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Load more";
+  }
+}
+
+document.getElementById("frametvLoadMoreBtn").addEventListener("click", loadMoreFrameTVArt);
 
 // Some source CDNs intermittently block hotlinked images (the Art Institute
 // of Chicago's currently 403s on every request via Cloudflare bot
@@ -435,9 +518,58 @@ function updateFrameTVArtStatusCount(count) {
   document.getElementById(id).addEventListener("change", () => loadFrameTVArt());
 });
 
+// ---------- category facets ----------
+function getFilteredFrameTVResults() {
+  return frameTVArtResults.filter((a) => frameTVCategoryFilter.has(a.category));
+}
+
+// Broken thumbnails get pruned from frameTVArtResults one at a time as each
+// <img> fails, which can happen in a burst right after a render — debounce
+// the facet rebuild so counts settle once, instead of thrashing per image.
+let frameTVFacetRefreshTimer = null;
+function scheduleFrameTVFacetRefresh() {
+  clearTimeout(frameTVFacetRefreshTimer);
+  frameTVFacetRefreshTimer = setTimeout(renderFrameTVCategoryFacets, 400);
+}
+
+function renderFrameTVCategoryFacets() {
+  const counts = new Map();
+  frameTVArtResults.forEach((a) => counts.set(a.category, (counts.get(a.category) || 0) + 1));
+
+  // Any category we haven't seen yet this search (including ones that show
+  // up for the first time via "Load more") defaults to checked; categories
+  // the user has already unchecked stay unchecked.
+  counts.forEach((_, c) => {
+    if (!frameTVKnownCategories.has(c)) {
+      frameTVKnownCategories.add(c);
+      frameTVCategoryFilter.add(c);
+    }
+  });
+
+  const categories = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a));
+  const el = document.getElementById("frametvCategoryFacets");
+  el.innerHTML = categories.map((c) => `
+    <label class="frametv-facet-item">
+      <input type="checkbox" data-category="${escapeHtml(c)}" ${frameTVCategoryFilter.has(c) ? "checked" : ""} />
+      <span>${escapeHtml(c)}</span>
+      <span class="facet-count">${counts.get(c)}</span>
+    </label>
+  `).join("");
+
+  el.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      if (cb.checked) frameTVCategoryFilter.add(cb.dataset.category);
+      else frameTVCategoryFilter.delete(cb.dataset.category);
+      renderFrameTVArtGrid();
+      updateFrameTVArtStatusCount(getFilteredFrameTVResults().length);
+    });
+  });
+}
+
 function renderFrameTVArtGrid() {
   const gridEl = document.getElementById("frametvArtGrid");
-  gridEl.innerHTML = frameTVArtResults.map((a) => `
+  const visible = getFilteredFrameTVResults();
+  gridEl.innerHTML = visible.map((a) => `
     <div class="art-card" data-art-key="${escapeHtml(a.key)}">
       <img src="${escapeHtml(a.thumbUrl)}" alt="${escapeHtml(a.title)}" loading="lazy" />
       <div class="art-card-meta">
@@ -453,7 +585,8 @@ function renderFrameTVArtGrid() {
     card.querySelector("img").addEventListener("error", () => {
       frameTVArtResults = frameTVArtResults.filter((a) => a.key !== card.dataset.artKey);
       card.remove();
-      updateFrameTVArtStatusCount(frameTVArtResults.length);
+      scheduleFrameTVFacetRefresh();
+      updateFrameTVArtStatusCount(getFilteredFrameTVResults().length);
     }, { once: true });
   });
 }

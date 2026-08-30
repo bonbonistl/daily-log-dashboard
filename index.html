@@ -83,13 +83,27 @@
           <input type="text" id="frametvSearchInput" placeholder="Search public art collections…" maxlength="200" />
           <button type="submit">Search</button>
         </form>
-        <div class="table-filter-row">
-          <label class="table-filter-checkbox"><input type="checkbox" id="frametvSourceArtic" checked /> Art Institute of Chicago</label>
-          <label class="table-filter-checkbox"><input type="checkbox" id="frametvSourceMet" checked /> The Met</label>
-          <label class="table-filter-checkbox"><input type="checkbox" id="frametvSourceCleveland" checked /> Cleveland Museum of Art</label>
+
+        <div class="frametv-art-layout">
+          <aside class="frametv-art-sidebar">
+            <div class="frametv-facet-group">
+              <h4>Source</h4>
+              <label class="frametv-facet-item"><input type="checkbox" id="frametvSourceArtic" checked /> Art Institute of Chicago</label>
+              <label class="frametv-facet-item"><input type="checkbox" id="frametvSourceMet" checked /> The Met</label>
+              <label class="frametv-facet-item"><input type="checkbox" id="frametvSourceCleveland" checked /> Cleveland Museum of Art</label>
+            </div>
+            <div class="frametv-facet-group">
+              <h4>Category</h4>
+              <div id="frametvCategoryFacets"></div>
+            </div>
+          </aside>
+
+          <div class="frametv-art-main">
+            <div id="frametvArtStatus" class="hint"></div>
+            <div id="frametvArtGrid" class="art-grid"></div>
+            <button type="button" id="frametvLoadMoreBtn" class="hidden">Load more</button>
+          </div>
         </div>
-        <div id="frametvArtStatus" class="hint"></div>
-        <div id="frametvArtGrid" class="art-grid"></div>
       </section>
     </div>
   </main>
