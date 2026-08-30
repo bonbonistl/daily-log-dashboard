@@ -71,8 +71,14 @@
         <form id="frametvSettingsForm" class="plan-add-form">
           <input type="text" id="frametvIp" placeholder="TV IP, e.g. 192.168.1.50" maxlength="100" required />
           <input type="number" id="frametvPort" placeholder="Port" value="8002" min="1" max="65535" required />
+          <input type="url" id="frametvRelayUrl" placeholder="Local relay URL (optional), e.g. http://localhost:8787" maxlength="300" />
           <button type="submit" id="frametvConnectBtn">Save &amp; Connect</button>
         </form>
+        <p class="hint drawer-hint">
+          If sending art fails with a message about needing a local relay, your TV's firmware requires it for
+          uploads — see <code>frametv-relay/README.md</code> in the project for a one-time setup, then enter its
+          address above.
+        </p>
       </section>
 
       <section class="panel" id="frametvArtPanel">

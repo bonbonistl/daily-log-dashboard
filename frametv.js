@@ -322,6 +322,7 @@ async function loadFrameTVData() {
       frameTVSettingsRow = data;
       document.getElementById("frametvIp").value = data.tv_ip || "";
       document.getElementById("frametvPort").value = data.tv_port || 8002;
+      document.getElementById("frametvRelayUrl").value = data.relay_url || "";
       updateFrameTVTrustCertLink();
       if (data.tv_ip && data.token) connectFrameTV({ silent: true });
     }
@@ -356,6 +357,7 @@ async function saveFrameTVSettings(fields) {
     tv_ip: fields.tv_ip,
     tv_port: fields.tv_port,
     token: fields.token,
+    relay_url: fields.relay_url,
     client_name: FRAMETV_CLIENT_NAME,
     updated_at: new Date().toISOString(),
   };
@@ -371,6 +373,7 @@ async function saveFrameTVSettings(fields) {
 async function connectFrameTV({ silent = false } = {}) {
   const ip = document.getElementById("frametvIp").value.trim();
   const port = parseInt(document.getElementById("frametvPort").value, 10) || 8002;
+  const relayUrl = document.getElementById("frametvRelayUrl").value.trim();
   if (!ip) {
     setFrameTVStatus("Enter your TV's IP address first.", "error");
     return;
@@ -387,7 +390,7 @@ async function connectFrameTV({ silent = false } = {}) {
 
   try {
     const { token } = await frameTVClient.connect();
-    await saveFrameTVSettings({ tv_ip: ip, tv_port: port, token });
+    await saveFrameTVSettings({ tv_ip: ip, tv_port: port, token, relay_url: relayUrl || null });
     setFrameTVStatus("Connected ✓", "ok");
     frameTVClient.getMatteList().then((list) => {
       if (list && list.length) frameTVMatteOptions = list;
@@ -659,6 +662,37 @@ async function fetchFrameTVImageForUpload(art) {
   return proxied;
 }
 
+// Sends via the local relay (frametv-relay/), which does the download and
+// the newer-firmware D2D-socket upload server-side — both things a browser
+// can't do for a CORS-blocked or D2D-only TV. The relay re-downloads the
+// image itself rather than reusing browser-fetched bytes, since it's making
+// that request from the user's real home IP instead of a proxy, which also
+// gives sources like the Art Institute of Chicago a better shot at working.
+async function sendFrameTVArtViaRelay(art, matte, statusEl) {
+  const relayUrl = frameTVSettingsRow && frameTVSettingsRow.relay_url;
+  if (!relayUrl) {
+    statusEl.textContent = "This TV needs a local relay for uploads — set a Local relay URL in the settings above (see frametv-relay/README.md for one-time setup), then try again.";
+    return;
+  }
+
+  const ip = document.getElementById("frametvIp").value.trim();
+  const port = parseInt(document.getElementById("frametvPort").value, 10) || 8002;
+
+  statusEl.textContent = "Sending via local relay…";
+  try {
+    const res = await fetch(`${relayUrl.replace(/\/$/, "")}/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tvIp: ip, tvPort: port, imageUrl: art.imageUrl, matte }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.ok) throw new Error(json.error || `Relay returned HTTP ${res.status}.`);
+    statusEl.textContent = "Sent ✓ — now showing on your Frame TV.";
+  } catch (e) {
+    statusEl.textContent = `Couldn't reach the local relay at ${relayUrl} — make sure it's running (npm start in frametv-relay/). ${e.message}`;
+  }
+}
+
 async function sendFrameTVArt(art) {
   const statusEl = document.getElementById("frametvSendStatus");
   const btn = document.getElementById("frametvSendBtn");
@@ -670,8 +704,20 @@ async function sendFrameTVArt(art) {
   }
 
   btn.disabled = true;
-  statusEl.textContent = "Fetching image…";
   try {
+    // Check the TV's Art API version first (a cheap round-trip) so a TV that
+    // needs the relay skips straight there, instead of downloading the
+    // full-size image in the browser only to discover uploadImage() will
+    // reject it anyway.
+    let apiVersion = null;
+    try { apiVersion = await frameTVClient.getApiVersion(); } catch {}
+
+    if (apiVersion !== "0.97") {
+      await sendFrameTVArtViaRelay(art, matte, statusEl);
+      return;
+    }
+
+    statusEl.textContent = "Fetching image…";
     const imgRes = await fetchFrameTVImageForUpload(art);
     const contentType = imgRes.headers.get("content-type") || "";
     const fileType = contentType.includes("png") ? "png" : "jpg";
@@ -686,7 +732,7 @@ async function sendFrameTVArt(art) {
 
     statusEl.textContent = "Sent ✓ — now showing on your Frame TV.";
   } catch (e) {
-    statusEl.textContent = e instanceof FrameTVUnsupportedUploadError ? e.message : `Failed: ${e.message}`;
+    statusEl.textContent = `Failed: ${e.message}`;
   } finally {
     btn.disabled = false;
   }
