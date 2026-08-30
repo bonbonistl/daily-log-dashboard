@@ -632,6 +632,33 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && document.getElementById("frametvDrawer").classList.contains("open")) closeFrameTVDrawer();
 });
 
+// Some source CDNs (Cleveland) don't send CORS headers, so a direct fetch()
+// is blocked even though the same image displays fine via <img>. Fall back
+// to a public image proxy (wsrv.nl) that re-serves the image with CORS
+// enabled — this fixes Cleveland entirely. It does NOT fix the Art
+// Institute of Chicago, whose CDN actively 403s the request itself (via
+// Cloudflare bot protection) regardless of who's asking, proxy included —
+// confirmed by testing the proxy against it directly.
+async function fetchFrameTVImageForUpload(art) {
+  try {
+    const direct = await fetch(art.imageUrl);
+    if (direct.ok) return direct;
+  } catch {
+    // CORS-blocked network error — fall through to the proxy below.
+  }
+
+  let proxied;
+  try {
+    proxied = await fetch(`https://wsrv.nl/?url=${encodeURIComponent(art.imageUrl)}`);
+  } catch {
+    proxied = null;
+  }
+  if (!proxied || !proxied.ok) {
+    throw new Error(`Couldn't download this image from ${art.source} for uploading, even via a fallback proxy — their server is blocking the request entirely. Try a different piece.`);
+  }
+  return proxied;
+}
+
 async function sendFrameTVArt(art) {
   const statusEl = document.getElementById("frametvSendStatus");
   const btn = document.getElementById("frametvSendBtn");
@@ -645,17 +672,7 @@ async function sendFrameTVArt(art) {
   btn.disabled = true;
   statusEl.textContent = "Fetching image…";
   try {
-    let imgRes;
-    try {
-      imgRes = await fetch(art.imageUrl);
-    } catch {
-      // fetch() throws an opaque "Failed to fetch" for CORS-blocked requests
-      // with no way to confirm the cause client-side — but some sources
-      // (Cleveland) are known not to send CORS headers on their image CDN,
-      // so images display fine via <img> but can't be downloaded for upload.
-      throw new Error(`Couldn't download this image from ${art.source} for uploading — their server doesn't allow browser downloads of it. Try a piece from The Met instead, which reliably works.`);
-    }
-    if (!imgRes.ok) throw new Error("Couldn't download that image from its source.");
+    const imgRes = await fetchFrameTVImageForUpload(art);
     const contentType = imgRes.headers.get("content-type") || "";
     const fileType = contentType.includes("png") ? "png" : "jpg";
     const bytes = new Uint8Array(await imgRes.arrayBuffer());
