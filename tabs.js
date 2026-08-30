@@ -5,19 +5,15 @@ const TOP_TABS = [
   { key: "home", btnId: "homeTabBtn", contentId: "homeApp" },
   { key: "health", btnId: "healthTabBtn", contentId: "app" },
   { key: "spiritual", btnId: "spiritualTabBtn", contentId: "spiritualApp" },
-  { key: "insights", btnId: "insightsTabBtn", contentId: "insightsApp" },
   { key: "groceries", btnId: "groceriesTabBtn", contentId: "groceriesApp" },
-  { key: "businesses", btnId: "businessesTabBtn", contentId: "businessesApp" },
-  { key: "crm", btnId: "crmTabBtn", contentId: "crmApp" },
+  { key: "connections", btnId: "connectionsTabBtn", contentId: "connectionsApp" },
   { key: "paper", btnId: "paperTabBtn", contentId: "paperApp" },
 ];
 
 let homeLoaded = false;
 let spiritualLoaded = false;
-let insightsLoaded = false;
 let groceriesLoaded = false;
-let businessesLoaded = false;
-let crmLoaded = false;
+let connectionsLoaded = false;
 let paperLoaded = false;
 
 // Which subtab is current within a top tab that has subtabs — tracked so the
@@ -25,6 +21,7 @@ let paperLoaded = false;
 let currentHealthSubtab = "overview";
 let currentGroceriesSubtab = "inventory";
 let currentHomeSubtab = "frametv";
+let currentConnectionsSubtab = "businesses";
 
 function activateTab(key) {
   TOP_TABS.forEach((t) => {
@@ -41,20 +38,13 @@ function activateTab(key) {
     spiritualLoaded = true;
     loadSpiritualData();
   }
-  if (key === "insights" && !insightsLoaded) {
-    insightsLoaded = true;
-    loadInsightsData();
-  }
   if (key === "groceries" && !groceriesLoaded) {
     groceriesLoaded = true;
     loadGroceriesData();
   }
-  if (key === "businesses" && !businessesLoaded) {
-    businessesLoaded = true;
+  if (key === "connections" && !connectionsLoaded) {
+    connectionsLoaded = true;
     loadBusinessesData();
-  }
-  if (key === "crm" && !crmLoaded) {
-    crmLoaded = true;
     loadCrmData();
   }
   if (key === "paper" && !paperLoaded) {
@@ -109,6 +99,25 @@ GROCERIES_SUBTABS.forEach((t) => {
   document.getElementById(t.btnId).addEventListener("click", () => activateGroceriesSubtab(t.key));
 });
 
+// ---------- connections sub-tabs ----------
+const CONNECTIONS_SUBTABS = [
+  { key: "businesses", btnId: "businessesSubtabBtn", contentId: "connectionsBusinesses" },
+  { key: "crm", btnId: "crmSubtabBtn", contentId: "connectionsCrm" },
+];
+
+function activateConnectionsSubtab(key) {
+  CONNECTIONS_SUBTABS.forEach((t) => {
+    document.getElementById(t.btnId).classList.toggle("active", t.key === key);
+    document.getElementById(t.contentId).classList.toggle("hidden", t.key !== key);
+  });
+  currentConnectionsSubtab = key;
+  updateUrlHash();
+}
+
+CONNECTIONS_SUBTABS.forEach((t) => {
+  document.getElementById(t.btnId).addEventListener("click", () => activateConnectionsSubtab(t.key));
+});
+
 // ---------- home sub-tabs ----------
 const HOME_SUBTABS = [
   { key: "frametv", btnId: "frametvSubtabBtn", contentId: "homeFrameTV" },
@@ -134,7 +143,12 @@ HOME_SUBTABS.forEach((t) => {
 function updateUrlHash() {
   const activeTop = TOP_TABS.find((t) => document.getElementById(t.btnId).classList.contains("active"));
   if (!activeTop) return;
-  const sub = activeTop.key === "health" ? currentHealthSubtab : activeTop.key === "groceries" ? currentGroceriesSubtab : activeTop.key === "home" ? currentHomeSubtab : null;
+  const sub =
+    activeTop.key === "health" ? currentHealthSubtab :
+    activeTop.key === "groceries" ? currentGroceriesSubtab :
+    activeTop.key === "home" ? currentHomeSubtab :
+    activeTop.key === "connections" ? currentConnectionsSubtab :
+    null;
   const next = "#" + (sub ? `${activeTop.key}/${sub}` : activeTop.key);
   if (location.hash !== next) history.replaceState(null, "", next);
 }
@@ -161,6 +175,9 @@ function applyRouteFromHash() {
   } else if (validTop === "home") {
     const validSub = HOME_SUBTABS.some((t) => t.key === subKey) ? subKey : "frametv";
     activateHomeSubtab(validSub);
+  } else if (validTop === "connections") {
+    const validSub = CONNECTIONS_SUBTABS.some((t) => t.key === subKey) ? subKey : "businesses";
+    activateConnectionsSubtab(validSub);
   }
 }
 

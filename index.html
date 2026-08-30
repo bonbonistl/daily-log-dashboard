@@ -26,10 +26,8 @@
       <button class="tab-btn" id="homeTabBtn" data-tab="home">House</button>
       <button class="tab-btn active" id="healthTabBtn" data-tab="health">Health</button>
       <button class="tab-btn" id="spiritualTabBtn" data-tab="spiritual">Habits</button>
-      <button class="tab-btn" id="insightsTabBtn" data-tab="insights">Insights</button>
       <button class="tab-btn" id="groceriesTabBtn" data-tab="groceries">Groceries</button>
-      <button class="tab-btn" id="businessesTabBtn" data-tab="businesses">Businesses</button>
-      <button class="tab-btn" id="crmTabBtn" data-tab="crm">CRM</button>
+      <button class="tab-btn" id="connectionsTabBtn" data-tab="connections">Connections</button>
       <button class="tab-btn" id="paperTabBtn" data-tab="paper">Paper</button>
     </div>
     <div class="controls" id="healthControls">
@@ -329,43 +327,88 @@
     </div>
   </main>
 
-  <main id="businessesApp" class="tab-content hidden">
-    <div id="businessesLoading">Loading data…</div>
+  <main id="connectionsApp" class="tab-content hidden">
+    <div class="subtabs">
+      <button class="subtab-btn active" id="businessesSubtabBtn">Businesses</button>
+      <button class="subtab-btn" id="crmSubtabBtn">CRM</button>
+    </div>
 
-    <section class="panel hidden" id="businessesPanel">
-      <div class="panel-heading-row">
-        <h2>Businesses</h2>
-        <span id="businessesUpdatedAt" class="updated-at"></span>
-      </div>
-      <p class="hint drawer-hint">Track companies you're watching and every opening's status through the pipeline. Manage the people you know there from the CRM tab.</p>
+    <div id="connectionsBusinesses" class="subtab-content">
+      <div id="businessesLoading">Loading data…</div>
 
-      <section id="businessesCards" class="cards"></section>
+      <section class="panel hidden" id="businessesPanel">
+        <div class="panel-heading-row">
+          <h2>Businesses</h2>
+          <span id="businessesUpdatedAt" class="updated-at"></span>
+        </div>
+        <p class="hint drawer-hint">Track companies you're watching and every opening's status through the pipeline. Manage the people you know there from the CRM subtab.</p>
 
-      <form id="addBusinessForm" class="plan-add-form">
-        <input type="text" id="newBusinessName" placeholder="Business name" maxlength="200" required />
-        <button type="submit">Add Business</button>
-      </form>
-      <p class="hint drawer-hint">Click a business name to add a careers link and notes.</p>
+        <section id="businessesCards" class="cards"></section>
 
-      <div class="table-filter-row">
-        <input type="text" id="businessFilterInput" placeholder="Filter by name, contact, or careers link…" />
-        <label class="table-filter-checkbox"><input type="checkbox" id="businessPmfOnlyFilter" /> PMF only</label>
-      </div>
+        <form id="addBusinessForm" class="plan-add-form">
+          <input type="text" id="newBusinessName" placeholder="Business name" maxlength="200" required />
+          <button type="submit">Add Business</button>
+        </form>
+        <p class="hint drawer-hint">Click a business name to add a careers link and notes.</p>
 
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th id="businessSortName" class="sortable-th">Business<span class="sort-indicator" id="businessSortNameIndicator"></span></th>
-            <th id="businessSortPmf" class="sortable-th" title="Product Market Fit — you'd be a good fit there">PMF<span class="sort-indicator" id="businessSortPmfIndicator"></span></th>
-            <th id="businessSortContacts" class="sortable-th">Contacts<span class="sort-indicator" id="businessSortContactsIndicator"></span></th>
-            <th id="businessSortCareers" class="sortable-th">Careers<span class="sort-indicator" id="businessSortCareersIndicator"></span></th>
-            <th id="businessSortOpenings" class="sortable-th">Openings<span class="sort-indicator" id="businessSortOpeningsIndicator"></span></th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="businessesTableBody"></tbody>
-      </table>
-    </section>
+        <div class="table-filter-row">
+          <input type="text" id="businessFilterInput" placeholder="Filter by name, contact, or careers link…" />
+          <label class="table-filter-checkbox"><input type="checkbox" id="businessPmfOnlyFilter" /> PMF only</label>
+        </div>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th id="businessSortName" class="sortable-th">Business<span class="sort-indicator" id="businessSortNameIndicator"></span></th>
+              <th id="businessSortPmf" class="sortable-th" title="Product Market Fit — you'd be a good fit there">PMF<span class="sort-indicator" id="businessSortPmfIndicator"></span></th>
+              <th id="businessSortContacts" class="sortable-th">Contacts<span class="sort-indicator" id="businessSortContactsIndicator"></span></th>
+              <th id="businessSortCareers" class="sortable-th">Careers<span class="sort-indicator" id="businessSortCareersIndicator"></span></th>
+              <th id="businessSortOpenings" class="sortable-th">Openings<span class="sort-indicator" id="businessSortOpeningsIndicator"></span></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="businessesTableBody"></tbody>
+        </table>
+      </section>
+    </div>
+
+    <div id="connectionsCrm" class="subtab-content hidden">
+      <div id="crmLoading">Loading data…</div>
+
+      <section class="panel hidden" id="crmPanel">
+        <div class="panel-heading-row">
+          <h2>CRM</h2>
+          <span id="crmUpdatedAt" class="updated-at"></span>
+        </div>
+        <p class="hint drawer-hint">People you know — optionally tied to a business, but not required to be.</p>
+
+        <form id="addPersonForm" class="plan-add-form">
+          <input type="text" id="newPersonName" placeholder="Person's name" maxlength="200" required />
+          <button type="submit">Add Person</button>
+        </form>
+        <p class="hint drawer-hint">Click a name to fill in their business, contact info, location, and birthday.</p>
+
+        <div class="table-filter-row">
+          <input type="text" id="peopleFilterInput" placeholder="Filter by name, business, title, or location…" />
+          <label class="table-filter-checkbox"><input type="checkbox" id="peopleNotCelebratedFilter" /> Not yet celebrated</label>
+        </div>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th id="peopleSortName" class="sortable-th">Name<span class="sort-indicator" id="peopleSortNameIndicator"></span></th>
+              <th id="peopleSortBusiness" class="sortable-th">Business<span class="sort-indicator" id="peopleSortBusinessIndicator"></span></th>
+              <th id="peopleSortLocation" class="sortable-th">Location<span class="sort-indicator" id="peopleSortLocationIndicator"></span></th>
+              <th id="peopleSortBirthday" class="sortable-th">Birthday<span class="sort-indicator" id="peopleSortBirthdayIndicator"></span></th>
+              <th id="peopleSortCelebrated" class="sortable-th" title="Celebrated their current birthday">Celebrated<span class="sort-indicator" id="peopleSortCelebratedIndicator"></span></th>
+              <th id="peopleSortLinks" class="sortable-th">Links<span class="sort-indicator" id="peopleSortLinksIndicator"></span></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="peopleTableBody"></tbody>
+        </table>
+      </section>
+    </div>
   </main>
 
   <div id="businessBackdrop" class="journal-backdrop"></div>
@@ -403,44 +446,6 @@
       </form>
     </div>
   </aside>
-
-  <main id="crmApp" class="tab-content hidden">
-    <div id="crmLoading">Loading data…</div>
-
-    <section class="panel hidden" id="crmPanel">
-      <div class="panel-heading-row">
-        <h2>CRM</h2>
-        <span id="crmUpdatedAt" class="updated-at"></span>
-      </div>
-      <p class="hint drawer-hint">People you know — optionally tied to a business, but not required to be.</p>
-
-      <form id="addPersonForm" class="plan-add-form">
-        <input type="text" id="newPersonName" placeholder="Person's name" maxlength="200" required />
-        <button type="submit">Add Person</button>
-      </form>
-      <p class="hint drawer-hint">Click a name to fill in their business, contact info, location, and birthday.</p>
-
-      <div class="table-filter-row">
-        <input type="text" id="peopleFilterInput" placeholder="Filter by name, business, title, or location…" />
-        <label class="table-filter-checkbox"><input type="checkbox" id="peopleNotCelebratedFilter" /> Not yet celebrated</label>
-      </div>
-
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th id="peopleSortName" class="sortable-th">Name<span class="sort-indicator" id="peopleSortNameIndicator"></span></th>
-            <th id="peopleSortBusiness" class="sortable-th">Business<span class="sort-indicator" id="peopleSortBusinessIndicator"></span></th>
-            <th id="peopleSortLocation" class="sortable-th">Location<span class="sort-indicator" id="peopleSortLocationIndicator"></span></th>
-            <th id="peopleSortBirthday" class="sortable-th">Birthday<span class="sort-indicator" id="peopleSortBirthdayIndicator"></span></th>
-            <th id="peopleSortCelebrated" class="sortable-th" title="Celebrated their current birthday">Celebrated<span class="sort-indicator" id="peopleSortCelebratedIndicator"></span></th>
-            <th id="peopleSortLinks" class="sortable-th">Links<span class="sort-indicator" id="peopleSortLinksIndicator"></span></th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="peopleTableBody"></tbody>
-      </table>
-    </section>
-  </main>
 
   <div id="personBackdrop" class="journal-backdrop"></div>
   <aside id="personDrawer" class="journal-drawer">
