@@ -64,15 +64,18 @@ function renderBusinessesTab() {
 }
 
 function renderBusinessesCards() {
-  const pipelineStatuses = new Set(["applied", "heard_back", "interviewing"]);
-  const active = jobOpenings.filter((o) => pipelineStatuses.has(o.status)).length;
-  const interviewing = jobOpenings.filter((o) => o.status === "interviewing").length;
-  const offered = jobOpenings.filter((o) => o.status === "offered").length;
+  const countByStatus = (key) => jobOpenings.filter((o) => o.status === key).length;
+  const applied = countByStatus("applied");
+  const heardBack = countByStatus("heard_back");
+  const interviewing = countByStatus("interviewing");
+  const offered = countByStatus("offered");
 
   document.getElementById("businessesCards").innerHTML = [
-    { label: "Businesses", value: `${businesses.length}`, sub: `${jobOpenings.length} opening(s) tracked` },
-    { label: "Active Pipeline", value: `${active}`, sub: "applied, heard back, or interviewing" },
-    { label: "Interviewing", value: `${interviewing}`, sub: interviewing ? "in progress" : "none right now" },
+    { label: "Companies", value: `${businesses.length}`, sub: "tracked" },
+    { label: "Tracked", value: `${jobOpenings.length}`, sub: "opening(s)" },
+    { label: "Applied", value: `${applied}`, sub: applied ? "in progress" : "none yet" },
+    { label: "Heard Back", value: `${heardBack}`, sub: heardBack ? "awaiting next step" : "none yet" },
+    { label: "Interviewed", value: `${interviewing}`, sub: interviewing ? "in progress" : "none right now" },
     { label: "Offers", value: `${offered}`, sub: offered ? "awaiting decision" : "none right now" },
   ].map((c) => `
     <div class="card">
@@ -212,6 +215,9 @@ function renderJobOpening(o) {
       </div>
       <div class="job-opening-meta">${metaParts.join(" · ")}</div>
       <div class="job-opening-controls">
+        <label class="job-reached-out-label" title="I reached out to a contact about this opportunity">
+          <input type="checkbox" class="reached-out-checkbox" ${o.reached_out ? "checked" : ""} /> Reached out
+        </label>
         <select class="job-status-select">${jobStatusSelectHtml(o.status)}</select>
         <button type="button" class="job-opening-remove" title="Remove opening">&times;</button>
       </div>
@@ -234,6 +240,9 @@ function bindBusinessRowEvents() {
   });
   document.querySelectorAll(".job-status-select").forEach((select) => {
     select.addEventListener("change", () => updateJobOpeningStatus(select));
+  });
+  document.querySelectorAll(".reached-out-checkbox").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => updateReachedOut(checkbox));
   });
   document.querySelectorAll(".job-opening-remove").forEach((btn) => {
     btn.addEventListener("click", () => removeJobOpening(btn));
@@ -340,6 +349,25 @@ async function updateJobOpeningStatus(select) {
   const { error } = await sb.from("job_openings").update(update).eq("id", openingId);
   if (error) { alert("Failed to update status: " + error.message); select.disabled = false; delete select.dataset.busy; return; }
   await loadBusinessesData();
+}
+
+async function updateReachedOut(checkbox) {
+  if (checkbox.dataset.busy) return;
+  checkbox.dataset.busy = "1";
+  checkbox.disabled = true;
+
+  const openingId = checkbox.closest("[data-opening-id]").dataset.openingId;
+  const { error } = await sb.from("job_openings").update({ reached_out: checkbox.checked }).eq("id", openingId);
+  if (error) {
+    alert("Failed to update: " + error.message);
+    checkbox.checked = !checkbox.checked;
+  } else {
+    const opening = jobOpenings.find((o) => String(o.id) === openingId);
+    if (opening) opening.reached_out = checkbox.checked;
+  }
+
+  checkbox.disabled = false;
+  delete checkbox.dataset.busy;
 }
 
 async function removeJobOpening(btn) {

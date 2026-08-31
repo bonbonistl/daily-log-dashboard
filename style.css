@@ -1213,6 +1213,17 @@ button:hover { border-color: var(--accent); }
 
 .job-status-select { font-size: 12px; }
 
+.job-reached-out-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.job-reached-out-label input { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
+
 .job-opening-remove {
   background: none;
   border: none;
