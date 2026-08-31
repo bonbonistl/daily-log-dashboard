@@ -64,6 +64,17 @@ function renderBusinessesTab() {
   renderBusinessesTable();
 }
 
+// null = no funnel filter (Companies), otherwise "tracked" or a JOB_STATUSES key
+let businessFunnelFilter = null;
+
+const FUNNEL_FILTER_LABELS = {
+  tracked: "Tracked",
+  applied: "Applied",
+  heard_back: "Heard Back",
+  interviewing: "Interviewed",
+  offered: "Offers",
+};
+
 function renderBusinessesCards() {
   const countByStatus = (key) => jobOpenings.filter((o) => o.status === key).length;
   const applied = countByStatus("applied");
@@ -72,19 +83,28 @@ function renderBusinessesCards() {
   const offered = countByStatus("offered");
 
   document.getElementById("businessesCards").innerHTML = [
-    { label: "Companies", value: `${businesses.length}`, sub: "tracked" },
-    { label: "Tracked", value: `${jobOpenings.length}`, sub: "opening(s)" },
-    { label: "Applied", value: `${applied}`, sub: applied ? "in progress" : "none yet" },
-    { label: "Heard Back", value: `${heardBack}`, sub: heardBack ? "awaiting next step" : "none yet" },
-    { label: "Interviewed", value: `${interviewing}`, sub: interviewing ? "in progress" : "none right now" },
-    { label: "Offers", value: `${offered}`, sub: offered ? "awaiting decision" : "none right now" },
+    { label: "Companies", value: `${businesses.length}`, sub: "tracked", funnel: null },
+    { label: "Tracked", value: `${jobOpenings.length}`, sub: "opening(s)", funnel: "tracked" },
+    { label: "Applied", value: `${applied}`, sub: applied ? "in progress" : "none yet", funnel: "applied" },
+    { label: "Heard Back", value: `${heardBack}`, sub: heardBack ? "awaiting next step" : "none yet", funnel: "heard_back" },
+    { label: "Interviewed", value: `${interviewing}`, sub: interviewing ? "in progress" : "none right now", funnel: "interviewing" },
+    { label: "Offers", value: `${offered}`, sub: offered ? "awaiting decision" : "none right now", funnel: "offered" },
   ].map((c) => `
-    <div class="card">
+    <button type="button" class="card card-clickable ${businessFunnelFilter === c.funnel ? "card-active" : ""}" data-funnel="${c.funnel || ""}">
       <div class="label">${c.label}</div>
       <div class="value">${c.value}</div>
       <div class="sub">${c.sub}</div>
-    </div>
+    </button>
   `).join("");
+
+  document.querySelectorAll("#businessesCards .card-clickable").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const funnel = btn.dataset.funnel || null;
+      businessFunnelFilter = businessFunnelFilter === funnel ? null : funnel;
+      renderBusinessesCards();
+      renderBusinessesTable();
+    });
+  });
 }
 
 function jobStatusSelectHtml(selected) {
@@ -116,6 +136,13 @@ function getVisibleBusinesses() {
 
   const filtered = businesses.filter((b) => {
     if (pmfOnly && !b.pmf) return false;
+    if (businessFunnelFilter) {
+      const bizOpenings = jobOpenings.filter((o) => o.business_id === b.id);
+      const inStage = businessFunnelFilter === "tracked"
+        ? bizOpenings.length > 0
+        : bizOpenings.some((o) => o.status === businessFunnelFilter);
+      if (!inStage) return false;
+    }
     if (!filterText) return true;
     const contactNames = businessPeople.filter((p) => p.business_id === b.id).map((p) => p.name).join(" ");
     const haystack = `${b.name} ${contactNames} ${b.careers_url || ""} ${b.notes || ""}`.toLowerCase();
@@ -149,10 +176,27 @@ BUSINESS_SORT_HEADERS.forEach(({ id, key }) => {
 document.getElementById("businessFilterInput").addEventListener("input", () => renderBusinessesTable());
 document.getElementById("businessPmfOnlyFilter").addEventListener("change", () => renderBusinessesTable());
 
+document.getElementById("businessFunnelFilterBadge").addEventListener("click", () => {
+  businessFunnelFilter = null;
+  renderBusinessesCards();
+  renderBusinessesTable();
+});
+
+function updateFunnelFilterBadge() {
+  const badge = document.getElementById("businessFunnelFilterBadge");
+  if (!businessFunnelFilter) {
+    badge.classList.add("hidden");
+    return;
+  }
+  badge.textContent = `${FUNNEL_FILTER_LABELS[businessFunnelFilter]} ✕`;
+  badge.classList.remove("hidden");
+}
+
 // ---------- businesses table ----------
 function renderBusinessesTable() {
   const bodyEl = document.getElementById("businessesTableBody");
   updateBusinessSortIndicators();
+  updateFunnelFilterBadge();
 
   if (!businesses.length) {
     bodyEl.innerHTML = `<tr><td colspan="6" class="journal-empty">No businesses tracked yet — add one above.</td></tr>`;
