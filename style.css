@@ -219,6 +219,7 @@ button:hover { border-color: var(--accent); }
   margin-bottom: 6px;
 }
 .journal-header h2 { margin: 0; font-size: 18px; }
+.journal-subtitle { font-size: 13px; color: var(--muted); margin-top: 2px; }
 
 #journalCloseBtn {
   background: none;
@@ -1020,6 +1021,7 @@ button:hover { border-color: var(--accent); }
   color: var(--muted);
 }
 .detail-form input,
+.detail-form select,
 .detail-form textarea {
   background: var(--bg);
   border: 1px solid var(--panel-border);
@@ -1030,6 +1032,12 @@ button:hover { border-color: var(--accent); }
   font-family: inherit;
 }
 .detail-form textarea { resize: vertical; }
+.detail-form-checkbox-label {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+.detail-form-checkbox-label input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 .detail-form h3 {
   margin: 8px 0 0 0;
   font-size: 13px;
@@ -1064,6 +1072,17 @@ button:hover { border-color: var(--accent); }
   letter-spacing: 0.04em;
 }
 .detail-form-section .plan-add-form { margin-top: 10px; }
+
+.detail-form-danger-btn {
+  background: none;
+  border: 1px solid var(--panel-border);
+  color: var(--danger);
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.detail-form-danger-btn:hover { border-color: var(--danger); }
 
 .careers-check-history {
   list-style: none;
@@ -1195,8 +1214,22 @@ button:hover { border-color: var(--accent); }
   gap: 10px;
   min-width: 0;
 }
-.job-opening-title { font-size: 14px; overflow-wrap: anywhere; }
-.job-opening-title a { color: var(--text); }
+.job-opening-title-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 0.15s;
+}
+.job-opening-title-btn:hover { text-decoration-color: var(--accent); }
+.job-opening-url-link { color: var(--muted); font-size: 12px; }
+.job-opening-url-link:hover { color: var(--accent); }
 
 .job-opening-meta {
   flex-basis: 100%;

@@ -4,6 +4,7 @@ let jobOpenings = []; // [{id, business_id, title, url, posted_date, status, app
 let businessPeople = []; // [{id, name, title, business_id}] — the full CRM roster, used for the table's Contacts column and the rail's link/add-contact controls
 let businessCareersChecks = []; // [{id, business_id, checked_at}] — history of "I checked the careers page" clicks, for the currently open drawer only
 let openBusinessId = null; // id of the business currently shown in the side rail, or null if closed
+let openOpeningId = null; // id of the job opening currently shown in its own side rail, or null if closed
 
 const JOB_STATUSES = [
   { key: "watching", label: "Watching" },
@@ -210,7 +211,8 @@ function renderJobOpening(o) {
   return `
     <div class="job-opening" data-opening-id="${o.id}">
       <div class="job-opening-main">
-        <span class="job-opening-title">${o.url ? `<a href="${o.url}" target="_blank" rel="noopener noreferrer">${o.title}</a>` : o.title}</span>
+        <button type="button" class="job-opening-title-btn">${o.title}</button>
+        ${o.url ? `<a class="job-opening-url-link" href="${o.url}" target="_blank" rel="noopener noreferrer" title="Open posting">↗</a>` : ""}
         <span class="job-status-badge status-${o.status}">${JOB_STATUS_LABELS[o.status]}</span>
       </div>
       <div class="job-opening-meta">${metaParts.join(" · ")}</div>
@@ -245,7 +247,10 @@ function bindBusinessRowEvents() {
     checkbox.addEventListener("change", () => updateReachedOut(checkbox));
   });
   document.querySelectorAll(".job-opening-remove").forEach((btn) => {
-    btn.addEventListener("click", () => removeJobOpening(btn));
+    btn.addEventListener("click", () => removeJobOpening(btn.closest("[data-opening-id]").dataset.openingId));
+  });
+  document.querySelectorAll(".job-opening-title-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openOpeningDrawer(btn.closest("[data-opening-id]").dataset.openingId));
   });
 }
 
@@ -370,13 +375,13 @@ async function updateReachedOut(checkbox) {
   delete checkbox.dataset.busy;
 }
 
-async function removeJobOpening(btn) {
-  const openingId = btn.closest("[data-opening-id]").dataset.openingId;
-  const opening = jobOpenings.find((o) => String(o.id) === openingId);
+async function removeJobOpening(openingId) {
+  const opening = jobOpenings.find((o) => String(o.id) === String(openingId));
   if (!confirm(`Remove opening "${opening.title}"?`)) return;
 
   const { error } = await sb.from("job_openings").delete().eq("id", openingId);
   if (error) { alert("Failed to remove opening: " + error.message); return; }
+  if (String(openOpeningId) === String(openingId)) closeOpeningDrawer();
   await loadBusinessesData();
 }
 
@@ -406,7 +411,11 @@ function closeBusinessDrawer() {
 
 document.getElementById("businessDrawerCloseBtn").addEventListener("click", closeBusinessDrawer);
 document.getElementById("businessBackdrop").addEventListener("click", closeBusinessDrawer);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openBusinessId != null) closeBusinessDrawer(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (openOpeningId != null) closeOpeningDrawer();
+  else if (openBusinessId != null) closeBusinessDrawer();
+});
 
 document.getElementById("businessDetailsForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -420,6 +429,65 @@ document.getElementById("businessDetailsForm").addEventListener("submit", async 
   const { error } = await sb.from("businesses").update(update).eq("id", openBusinessId);
   if (error) { alert("Failed to save business details: " + error.message); return; }
   await loadBusinessesData();
+});
+
+// ---------- opening detail rail ----------
+function openOpeningDrawer(openingId) {
+  const opening = jobOpenings.find((o) => String(o.id) === String(openingId));
+  if (!opening) return;
+  openOpeningId = opening.id;
+
+  const business = businesses.find((b) => b.id === opening.business_id);
+  document.getElementById("openingDrawerTitle").textContent = opening.title;
+  document.getElementById("openingDrawerSubtitle").textContent = business ? business.name : "";
+  document.getElementById("openingTitle").value = opening.title || "";
+  document.getElementById("openingUrl").value = opening.url || "";
+  document.getElementById("openingStatus").innerHTML = jobStatusSelectHtml(opening.status);
+  document.getElementById("openingReachedOut").checked = !!opening.reached_out;
+  document.getElementById("openingPostedDate").value = opening.posted_date || "";
+  document.getElementById("openingAppliedDate").value = opening.applied_date || "";
+  document.getElementById("openingNotes").value = opening.notes || "";
+
+  document.getElementById("openingDrawer").classList.add("open");
+  document.getElementById("openingBackdrop").classList.add("open");
+}
+
+function closeOpeningDrawer() {
+  openOpeningId = null;
+  document.getElementById("openingDrawer").classList.remove("open");
+  document.getElementById("openingBackdrop").classList.remove("open");
+}
+
+document.getElementById("openingDrawerCloseBtn").addEventListener("click", closeOpeningDrawer);
+document.getElementById("openingBackdrop").addEventListener("click", closeOpeningDrawer);
+
+document.getElementById("openingDetailsForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (openOpeningId == null) return;
+
+  const title = document.getElementById("openingTitle").value.trim();
+  if (!title) return;
+  const newStatus = document.getElementById("openingStatus").value;
+  const opening = jobOpenings.find((o) => String(o.id) === String(openOpeningId));
+
+  const update = {
+    title,
+    url: document.getElementById("openingUrl").value.trim() || null,
+    status: newStatus,
+    reached_out: document.getElementById("openingReachedOut").checked,
+    posted_date: document.getElementById("openingPostedDate").value || null,
+    applied_date: document.getElementById("openingAppliedDate").value || null,
+    notes: document.getElementById("openingNotes").value.trim() || null,
+  };
+  if (opening && opening.status !== newStatus) update.status_changed_at = new Date().toISOString();
+
+  const { error } = await sb.from("job_openings").update(update).eq("id", openOpeningId);
+  if (error) { alert("Failed to save opening: " + error.message); return; }
+  await loadBusinessesData();
+});
+
+document.getElementById("openingRemoveBtn").addEventListener("click", () => {
+  if (openOpeningId != null) removeJobOpening(openOpeningId);
 });
 
 // ---------- business detail rail: careers page checks ----------

@@ -473,6 +473,45 @@
     </div>
   </aside>
 
+  <div id="openingBackdrop" class="journal-backdrop"></div>
+  <aside id="openingDrawer" class="journal-drawer">
+    <div class="journal-header">
+      <div>
+        <h2 id="openingDrawerTitle">Opportunity</h2>
+        <div id="openingDrawerSubtitle" class="journal-subtitle"></div>
+      </div>
+      <button id="openingDrawerCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <form id="openingDetailsForm" class="detail-form">
+      <label>Title
+        <input type="text" id="openingTitle" maxlength="200" required />
+      </label>
+      <label>URL
+        <input type="url" id="openingUrl" placeholder="https://..." maxlength="500" />
+      </label>
+      <label>Status
+        <select id="openingStatus"></select>
+      </label>
+      <label class="detail-form-checkbox-label">
+        <input type="checkbox" id="openingReachedOut" />
+        Reached out to a contact about this
+      </label>
+      <label>Posted
+        <input type="date" id="openingPostedDate" />
+      </label>
+      <label>Applied
+        <input type="date" id="openingAppliedDate" />
+      </label>
+      <label>Notes
+        <textarea id="openingNotes" rows="3" placeholder="Anything else worth remembering"></textarea>
+      </label>
+      <button type="submit">Save</button>
+    </form>
+    <div class="detail-form-section">
+      <button type="button" id="openingRemoveBtn" class="detail-form-danger-btn">Remove this opening</button>
+    </div>
+  </aside>
+
   <div id="personBackdrop" class="journal-backdrop"></div>
   <aside id="personDrawer" class="journal-drawer">
     <div class="journal-header">
