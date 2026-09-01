@@ -501,7 +501,7 @@ function renderPracticesList() {
     });
   });
 
-  document.querySelectorAll(".practice-emoji-input").forEach((input) => {
+  document.querySelectorAll("#practicesList .practice-emoji-input").forEach((input) => {
     input.addEventListener("change", async () => {
       const id = input.dataset.id;
       const emoji = input.value.trim() || null;
