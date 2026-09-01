@@ -1,15 +1,20 @@
-const TIMES_OF_DAY = ["Morning", "Mid Morning", "Noon", "Night"];
-const TIME_KEY = { Morning: "morning", "Mid Morning": "mid_morning", Noon: "noon", Night: "night" };
+const TIMES_OF_DAY = ["Morning", "Mid Morning", "Noon", "After Work", "Night"];
+const TIME_KEY = { Morning: "morning", "Mid Morning": "mid_morning", Noon: "noon", "After Work": "after_work", Night: "night" };
 // Index = JS Date.getDay() (0=Sun..6=Sat), matching rule_of_life_practices.days.
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const ROL_RANGE_DAYS = 14;
 
 let rolRows = [];
-let rolPractices = []; // [{id, name, emoji, morning, mid_morning, noon, night, days, sort_order}], ordered by sort_order
+let rolPractices = []; // [{id, name, emoji, morning, mid_morning, noon, after_work, night, days, sort_order}], ordered by sort_order
 let rolDisruptions = [];
 let allDisruptionCauses = []; // every cause ever logged, all-time — powers the reusable suggestion chips
 let spiritualLoadedOnce = false;
 let checkinDateOffset = 0; // 0 = today, 1 = yesterday, 2 = day before
+// Manual expand/collapse overrides for the check-in accordion, keyed by time-of-day.
+// Groups collapse automatically once fully checked off; this only tracks the user
+// clicking a header to fight that default. Cleared whenever the viewed date changes,
+// since "collapsed" only makes sense relative to that day's completion state.
+let checkinManualCollapse = {};
 
 async function loadSpiritualData() {
   // Only blank the page on the first load — background refreshes update in place.
@@ -110,6 +115,10 @@ function renderCheckin() {
 
   const html = TIMES_OF_DAY.map((time) => {
     const applicable = rolPractices.filter((p) => p[TIME_KEY[time]] && practiceAppliesOnDate(p, viewDate));
+    const doneCount = applicable.filter((p) => findRolRow(viewDate, time, p.name)).length;
+    const allDone = applicable.length > 0 && doneCount === applicable.length;
+    const collapsed = checkinManualCollapse.hasOwnProperty(time) ? checkinManualCollapse[time] : allDone;
+
     const items = applicable.map((p) => {
       const row = findRolRow(viewDate, time, p.name);
       const checked = !!row;
@@ -121,14 +130,27 @@ function renderCheckin() {
       `;
     }).join("");
     return `
-      <div class="checkin-group">
-        <h3>${time}</h3>
+      <div class="checkin-group ${collapsed ? "collapsed" : ""} ${allDone ? "all-done" : ""}" data-time="${time}">
+        <button type="button" class="checkin-group-header">
+          <span class="checkin-group-chevron">▾</span>
+          <h3>${time}</h3>
+          ${applicable.length ? `<span class="checkin-group-count">${doneCount}/${applicable.length}</span>` : ""}
+        </button>
         <div class="rol-checklist">${applicable.length ? items : `<div class="journal-empty">No practices assigned to ${time.toLowerCase()}.</div>`}</div>
       </div>
     `;
   }).join("");
 
   document.getElementById("checkinGroups").innerHTML = html;
+
+  document.querySelectorAll("#checkinGroups .checkin-group-header").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const group = btn.closest(".checkin-group");
+      const time = group.dataset.time;
+      checkinManualCollapse[time] = !group.classList.contains("collapsed");
+      group.classList.toggle("collapsed");
+    });
+  });
 
   document.querySelectorAll("#checkinGroups .rol-item").forEach((label) => {
     label.addEventListener("click", (e) => {
@@ -162,11 +184,13 @@ async function toggleCheckin(label) {
 document.getElementById("checkinPrevBtn").addEventListener("click", () => {
   if (checkinDateOffset >= 2) return;
   checkinDateOffset++;
+  checkinManualCollapse = {};
   renderCheckin();
 });
 document.getElementById("checkinNextBtn").addEventListener("click", () => {
   if (checkinDateOffset <= 0) return;
   checkinDateOffset--;
+  checkinManualCollapse = {};
   renderCheckin();
 });
 
@@ -518,7 +542,7 @@ document.getElementById("addPracticeForm").addEventListener("submit", async (e) 
     // where it belongs afterward via the checkboxes, rather than it defaulting into all four.
     const { error } = await sb.from("rule_of_life_practices").insert({
       name, emoji, sort_order: sortOrder,
-      morning: false, mid_morning: false, noon: false, night: false,
+      morning: false, mid_morning: false, noon: false, after_work: false, night: false,
     });
     if (error) throw error;
     emojiInput.value = "";

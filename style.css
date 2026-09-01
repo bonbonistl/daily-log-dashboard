@@ -336,6 +336,51 @@ button:hover { border-color: var(--accent); }
   gap: 8px;
 }
 
+/* Habits check-in: vertical accordion (5 time-of-day sections) rather than a grid,
+   so a fully-checked-off section can collapse to a single slim header row instead
+   of leaving stretched empty space next to taller, still-open sections. */
+.rol-checkin-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rol-checkin-groups .checkin-group {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 6px 14px 14px;
+}
+.rol-checkin-groups .checkin-group.all-done {
+  border-color: rgba(15, 118, 110, 0.35);
+}
+.rol-checkin-groups .checkin-group-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  padding: 8px 0;
+  cursor: pointer;
+  text-align: left;
+}
+.rol-checkin-groups .checkin-group-header h3 {
+  margin: 0;
+  flex: 1;
+}
+.rol-checkin-groups .checkin-group-chevron {
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform 0.15s;
+}
+.rol-checkin-groups .checkin-group-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.rol-checkin-groups .checkin-group.all-done .checkin-group-count { color: var(--accent); }
+.rol-checkin-groups .checkin-group.collapsed .checkin-group-chevron { transform: rotate(-90deg); }
+.rol-checkin-groups .checkin-group.collapsed .rol-checklist { display: none; }
+
 .rol-item {
   display: flex;
   align-items: center;
