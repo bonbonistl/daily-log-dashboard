@@ -2,12 +2,13 @@ const healthControls = document.getElementById("healthControls");
 
 // ---------- top-level tabs ----------
 const TOP_TABS = [
-  { key: "home", btnId: "homeTabBtn", contentId: "homeApp" },
+  { key: "today", btnId: "todayTabBtn", contentId: "todayApp" },
   { key: "health", btnId: "healthTabBtn", contentId: "app" },
   { key: "spiritual", btnId: "spiritualTabBtn", contentId: "spiritualApp" },
   { key: "groceries", btnId: "groceriesTabBtn", contentId: "groceriesApp" },
   { key: "connections", btnId: "connectionsTabBtn", contentId: "connectionsApp" },
   { key: "paper", btnId: "paperTabBtn", contentId: "paperApp" },
+  { key: "home", btnId: "homeTabBtn", contentId: "homeApp" },
 ];
 
 let homeLoaded = false;
@@ -30,6 +31,8 @@ function activateTab(key) {
   });
   healthControls.classList.toggle("hidden", key !== "health");
 
+  // Not lazy-once like the others: Today is time-sensitive, so re-fetch on every visit.
+  if (key === "today") loadTodayData();
   if (key === "home" && !homeLoaded) {
     homeLoaded = true;
     loadFrameTVData();
@@ -154,7 +157,7 @@ function updateUrlHash() {
 }
 
 // Reads the current hash and activates the tab/subtab it names, falling back
-// to Health/Overview for anything empty or unrecognized. Only called once
+// to Today for anything empty or unrecognized. Only called once
 // signed in — calling it earlier would fire each tab's lazy data load before
 // there's a session, permanently tripping its "already loaded" guard on the
 // resulting error.
@@ -163,7 +166,7 @@ function applyRouteFromHash() {
 
   const [topKey, subKey] = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
 
-  const validTop = TOP_TABS.some((t) => t.key === topKey) ? topKey : "health";
+  const validTop = TOP_TABS.some((t) => t.key === topKey) ? topKey : "today";
   activateTab(validTop);
 
   if (validTop === "health") {

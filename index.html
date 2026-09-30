@@ -27,14 +27,15 @@
   <header>
     <h1>LifeOS</h1>
     <div class="tabs">
-      <button class="tab-btn" id="homeTabBtn" data-tab="home">House</button>
-      <button class="tab-btn active" id="healthTabBtn" data-tab="health">Health</button>
+      <button class="tab-btn active" id="todayTabBtn" data-tab="today">Today</button>
+      <button class="tab-btn" id="healthTabBtn" data-tab="health">Health</button>
       <button class="tab-btn" id="spiritualTabBtn" data-tab="spiritual">Habits</button>
       <button class="tab-btn" id="groceriesTabBtn" data-tab="groceries">Groceries</button>
       <button class="tab-btn" id="connectionsTabBtn" data-tab="connections">Connections</button>
       <button class="tab-btn" id="paperTabBtn" data-tab="paper">Paper</button>
+      <button class="tab-btn" id="homeTabBtn" data-tab="home">House</button>
     </div>
-    <div class="controls" id="healthControls">
+    <div class="controls hidden" id="healthControls">
       <label>
         Range
         <select id="rangeSelect">
@@ -133,7 +134,57 @@
     <div id="frametvDrawerBody" class="detail-form"></div>
   </aside>
 
-  <main id="app" class="tab-content">
+  <main id="todayApp" class="tab-content">
+    <div class="today-hero">
+      <div>
+        <h2 id="todayGreeting" class="today-greeting">Today</h2>
+        <div id="todayDateLine" class="today-dateline"></div>
+      </div>
+      <span id="todayUpdatedAt" class="updated-at"></span>
+    </div>
+    <div id="todayLoading" class="today-loading">Loading data…</div>
+
+    <div class="today-grid">
+      <section class="today-col">
+        <div class="panel">
+          <div class="panel-heading-row">
+            <h2 id="todayHabitsHeading">Habits</h2>
+            <span id="todayHabitsProgress" class="today-count"></span>
+          </div>
+          <div id="todayHabits"></div>
+        </div>
+      </section>
+
+      <section class="today-col">
+        <div class="panel">
+          <div class="panel-heading-row">
+            <h2>Birthdays <span class="hint">next 7 days</span></h2>
+            <span id="todayBirthdaysCount" class="today-count"></span>
+          </div>
+          <div id="todayBirthdays"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading-row">
+            <h2>Food &amp; Exercise</h2>
+            <button id="todayHealthOpenBtn">Open plan</button>
+          </div>
+          <div id="todayHealthCards" class="cards today-cards"></div>
+          <div id="todayPlanList"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading-row">
+            <h2>Jobs on your radar</h2>
+            <span id="todayJobsCount" class="today-count"></span>
+          </div>
+          <div id="todayJobs"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <main id="app" class="tab-content hidden">
     <div class="subtabs">
       <button class="subtab-btn active" id="overviewSubtabBtn">Overview</button>
       <button class="subtab-btn" id="exerciseSubtabBtn">Exercise</button>
@@ -629,6 +680,7 @@
   <script src="crm.js"></script>
   <script src="paper.js"></script>
   <script src="frametv.js"></script>
+  <script src="today.js"></script>
   <script src="tabs.js"></script>
   <script src="auth.js"></script>
 </body>

@@ -15,7 +15,7 @@ function showApp(email) {
   appShell.classList.remove("hidden");
   userEmailLabel.textContent = email;
   loadData(); // kick off the initial Health data load now that we're authenticated
-  applyRouteFromHash(); // activate whichever tab/subtab the URL points to (defaults to Health)
+  applyRouteFromHash(); // activate whichever tab/subtab the URL points to (defaults to Today)
 }
 
 function showGate(message) {

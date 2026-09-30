@@ -1,0 +1,401 @@
+// "Today" dashboard — a time-aware landing page that pulls the few things that
+// matter right now from every other tab: habits due in the current time slot
+// (plus anything still open from earlier), today's/upcoming birthdays, active
+// job openings, and today's food/exercise numbers. Fetches its own data rather
+// than depending on the other tabs' lazy loads, so it works as the first screen.
+
+// When each habit time slot "starts", in minutes after midnight. The current
+// slot is the latest one whose start has passed; earlier slots with unchecked
+// items surface as catch-up, later ones as "coming up".
+const TODAY_SLOT_STARTS = {
+  Morning: 0,
+  "Mid Morning": 9 * 60,
+  Noon: 11 * 60 + 30,
+  "After Work": 16 * 60 + 30,
+  Night: 19 * 60 + 30,
+};
+const BIRTHDAY_LOOKAHEAD_DAYS = 7;
+const BIRTHDAY_BELATED_DAYS = 3;
+const INACTIVE_JOB_STATUSES = ["declined", "auto_declined"];
+// Pipeline order, furthest along first — an offer matters more than something you're watching.
+const JOB_STAGE_RANK = { offered: 0, interviewing: 1, heard_back: 2, applied: 3, watching: 4 };
+const JOB_STALE_DAYS = 10;
+
+let todayData = null; // { practices, habitLog, people, openings, businesses, logRows, planRows }
+let todayLoadedOnce = false;
+let todayShowUpcomingHabits = false;
+
+const escHtml = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function loadTodayData() {
+  const statusEl = document.getElementById("todayLoading");
+  if (!todayLoadedOnce) {
+    statusEl.textContent = "Loading data…";
+    statusEl.classList.remove("hidden");
+  }
+
+  const todayStr = todayLocalStr();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const fetchPromise = Promise.all([
+    sb.from("rule_of_life_practices").select("*").order("sort_order", { ascending: true }),
+    sb.from("rule_of_life_log").select("*").eq("log_date", todayStr),
+    sb.from("people").select("id, name, birthday, birthday_celebrated_year").not("birthday", "is", null),
+    sb.from("job_openings").select("*"),
+    sb.from("businesses").select("id, name"),
+    // Yesterday too, so "time since last food" works before today's first meal.
+    sb.from("daily_log").select("*").gte("log_date", toLocalDateStr(yesterday))
+      .order("log_date", { ascending: true }).order("id", { ascending: true }),
+    sb.from("food_plan").select("*").eq("log_date", todayStr),
+  ]);
+
+  let results;
+  try {
+    results = await withTimeout(fetchPromise, 15000, "Loading today");
+  } catch (e) {
+    statusEl.textContent = e.message;
+    statusEl.classList.remove("hidden");
+    return;
+  }
+  const error = results.find((r) => r.error)?.error;
+  if (error) {
+    statusEl.textContent = "Error loading data: " + error.message;
+    statusEl.classList.remove("hidden");
+    return;
+  }
+
+  const [practicesRes, habitLogRes, peopleRes, openingsRes, businessesRes, logRes, planRes] = results;
+  todayData = {
+    practices: practicesRes.data,
+    habitLog: habitLogRes.data,
+    people: peopleRes.data,
+    openings: openingsRes.data,
+    businesses: businessesRes.data,
+    logRows: logRes.data,
+    planRows: planRes.data,
+  };
+  todayLoadedOnce = true;
+  statusEl.classList.add("hidden");
+  markUpdated("todayUpdatedAt");
+  renderTodayDashboard();
+}
+
+function renderTodayDashboard() {
+  if (!todayData) return;
+  const now = new Date();
+  const todayStr = todayLocalStr();
+  renderTodayGreeting(now);
+  renderTodayHabits(now, todayStr);
+  renderTodayBirthdays(now);
+  renderTodayJobs(now);
+  renderTodayHealth(todayStr);
+}
+
+// ---------- greeting ----------
+function currentHabitSlot(now) {
+  const mins = now.getHours() * 60 + now.getMinutes();
+  return TIMES_OF_DAY.filter((t) => TODAY_SLOT_STARTS[t] <= mins).pop() || TIMES_OF_DAY[0];
+}
+
+function renderTodayGreeting(now) {
+  const h = now.getHours();
+  const greeting = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  document.getElementById("todayGreeting").textContent = greeting;
+  document.getElementById("todayDateLine").textContent =
+    now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }) +
+    " · " + now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+// ---------- habits ----------
+function renderTodayHabits(now, todayStr) {
+  const { practices, habitLog } = todayData;
+  const current = currentHabitSlot(now);
+  const currentIdx = TIMES_OF_DAY.indexOf(current);
+
+  const slotItems = (time) =>
+    practices
+      .filter((p) => p[TIME_KEY[time]] && practiceAppliesOnDate(p, todayStr))
+      .map((p) => ({ p, time, row: habitLog.find((r) => r.time_of_day === time && r.practice === p.name) }));
+
+  const itemHtml = (it, extraLabel) => `
+    <label class="rol-item ${it.row ? "done" : ""}" data-time="${escHtml(it.time)}" data-practice="${escHtml(it.p.name)}" data-id="${it.row ? it.row.id : ""}">
+      <input type="checkbox" ${it.row ? "checked" : ""} />
+      <span>${escHtml(practiceLabel(it.p))}</span>
+      ${extraLabel ? `<span class="today-item-tag">${escHtml(extraLabel)}</span>` : ""}
+    </label>
+  `;
+
+  const nowItems = slotItems(current);
+  const earlierOpen = TIMES_OF_DAY.slice(0, currentIdx).flatMap(slotItems).filter((it) => !it.row);
+  const laterItems = TIMES_OF_DAY.slice(currentIdx + 1).flatMap(slotItems);
+
+  const allToday = TIMES_OF_DAY.flatMap(slotItems);
+  const doneToday = allToday.filter((it) => it.row).length;
+  document.getElementById("todayHabitsProgress").textContent = allToday.length ? `${doneToday}/${allToday.length} done today` : "";
+  document.getElementById("todayHabitsHeading").textContent = `Habits — ${current}`;
+
+  const nowDone = nowItems.filter((it) => it.row).length;
+  let html = `
+    <div class="today-subhead">Now <span class="hint">${nowItems.length ? `${nowDone}/${nowItems.length}` : ""}</span></div>
+    <div class="rol-checklist">
+      ${nowItems.length ? nowItems.map((it) => itemHtml(it)).join("") : `<div class="journal-empty">Nothing scheduled for ${current.toLowerCase()}.</div>`}
+    </div>
+  `;
+  if (nowItems.length && nowDone === nowItems.length) {
+    html = `<div class="today-allclear">✓ All ${current.toLowerCase()} habits done</div>` + html;
+  }
+
+  if (earlierOpen.length) {
+    html += `
+      <div class="today-subhead today-subhead-warn">Still open from earlier <span class="hint">${earlierOpen.length}</span></div>
+      <div class="rol-checklist">${earlierOpen.map((it) => itemHtml(it, it.time)).join("")}</div>
+    `;
+  }
+
+  if (laterItems.length) {
+    const laterOpen = laterItems.filter((it) => !it.row).length;
+    html += `
+      <button type="button" class="today-toggle" id="todayUpcomingToggle">
+        ${todayShowUpcomingHabits ? "▾" : "▸"} Coming up later <span class="hint">${laterOpen} to go</span>
+      </button>
+      ${todayShowUpcomingHabits ? `<div class="rol-checklist">${laterItems.map((it) => itemHtml(it, it.time)).join("")}</div>` : ""}
+    `;
+  }
+
+  const el = document.getElementById("todayHabits");
+  el.innerHTML = html;
+
+  el.querySelectorAll(".rol-item").forEach((label) => {
+    label.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (label.dataset.busy) return;
+      toggleTodayHabit(label);
+    });
+  });
+  const toggle = document.getElementById("todayUpcomingToggle");
+  if (toggle) toggle.addEventListener("click", () => {
+    todayShowUpcomingHabits = !todayShowUpcomingHabits;
+    renderTodayHabits(new Date(), todayLocalStr());
+  });
+}
+
+async function toggleTodayHabit(label) {
+  label.dataset.busy = "1";
+  const { time, practice, id } = label.dataset;
+  const { error } = id
+    ? await sb.from("rule_of_life_log").delete().eq("id", id)
+    : await sb.from("rule_of_life_log").insert({ log_date: todayLocalStr(), time_of_day: time, practice });
+  if (error) { alert("Failed to update: " + error.message); delete label.dataset.busy; return; }
+  await loadTodayData();
+  // Keep the Habits tab in sync if it's already been opened this session.
+  if (typeof spiritualLoaded !== "undefined" && spiritualLoaded) loadSpiritualData();
+}
+
+// ---------- birthdays ----------
+// people.birthday is free text like "8/24" (year usually unknown).
+function nextBirthdayInfo(p, now) {
+  const m = (p.birthday || "").match(/^(\d{1,2})\/(\d{1,2})/);
+  if (!m) return null;
+  const month = Number(m[1]) - 1, day = Number(m[2]);
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Check last year / this year / next year so both belated and upcoming-across-New-Year work.
+  let best = null;
+  for (const y of [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]) {
+    const d = new Date(y, month, day);
+    const diff = Math.round((d - midnight) / 86400000);
+    if (diff >= -BIRTHDAY_BELATED_DAYS && diff <= BIRTHDAY_LOOKAHEAD_DAYS && (best == null || Math.abs(diff) < Math.abs(best.diff))) {
+      best = { diff, year: y, date: d };
+    }
+  }
+  return best;
+}
+
+const bdayGroup = (e) => (e.info.diff === 0 ? 0 : e.info.diff < 0 ? 1 : 2);
+
+function renderTodayBirthdays(now) {
+  const entries = todayData.people
+    .map((p) => ({ p, info: nextBirthdayInfo(p, now) }))
+    .filter((e) => e.info)
+    .map((e) => ({ ...e, celebrated: e.p.birthday_celebrated_year === e.info.year }))
+    // Belated ones only matter if you haven't celebrated them yet.
+    .filter((e) => e.info.diff >= 0 || !e.celebrated)
+    // Today first, then belated (still actionable), then upcoming in date order.
+    .sort((a, b) => bdayGroup(a) - bdayGroup(b) || a.info.diff - b.info.diff || a.p.name.localeCompare(b.p.name));
+
+  const todays = entries.filter((e) => e.info.diff === 0);
+  document.getElementById("todayBirthdaysCount").textContent = todays.length
+    ? `${todays.length} today`
+    : "";
+
+  const whenLabel = (diff, date) => {
+    if (diff === 0) return "Today 🎉";
+    if (diff === 1) return "Tomorrow";
+    if (diff === -1) return "Yesterday";
+    if (diff < 0) return `${-diff} days ago`;
+    return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  };
+
+  const el = document.getElementById("todayBirthdays");
+  if (!entries.length) {
+    el.innerHTML = `<div class="journal-empty">No birthdays in the next ${BIRTHDAY_LOOKAHEAD_DAYS} days.</div>`;
+    return;
+  }
+  el.innerHTML = entries.map((e) => `
+    <div class="today-row ${e.info.diff === 0 ? "today-row-highlight" : ""} ${e.info.diff < 0 ? "today-row-belated" : ""}">
+      <div class="today-row-main">
+        <div class="today-row-title">${escHtml(e.p.name)}</div>
+        <div class="today-row-sub">${whenLabel(e.info.diff, e.info.date)}</div>
+      </div>
+      ${e.info.diff <= 0 ? `
+        <label class="today-celebrate">
+          <input type="checkbox" data-person-id="${e.p.id}" data-year="${e.info.year}" ${e.celebrated ? "checked" : ""} />
+          Celebrated
+        </label>` : ""}
+    </div>
+  `).join("");
+
+  el.querySelectorAll(".today-celebrate input").forEach((cb) => {
+    cb.addEventListener("change", () => updateTodayCelebrated(cb));
+  });
+}
+
+async function updateTodayCelebrated(cb) {
+  cb.disabled = true;
+  const year = cb.checked ? Number(cb.dataset.year) : null;
+  const { error } = await sb.from("people").update({ birthday_celebrated_year: year }).eq("id", cb.dataset.personId);
+  if (error) {
+    alert("Failed to update: " + error.message);
+    cb.checked = !cb.checked;
+    cb.disabled = false;
+    return;
+  }
+  const person = todayData.people.find((p) => String(p.id) === cb.dataset.personId);
+  if (person) person.birthday_celebrated_year = year;
+  cb.disabled = false;
+  if (typeof connectionsLoaded !== "undefined" && connectionsLoaded) loadCrmData();
+}
+
+// ---------- jobs ----------
+function renderTodayJobs(now) {
+  const { openings, businesses } = todayData;
+  const nameFor = (id) => businesses.find((b) => b.id === id)?.name || "Unknown company";
+  const daysSince = (ts) => (ts ? Math.floor((now - new Date(ts)) / 86400000) : null);
+
+  const active = openings
+    .filter((o) => !INACTIVE_JOB_STATUSES.includes(o.status))
+    .map((o) => ({ o, age: daysSince(o.status_changed_at || o.created_at) }))
+    .sort((a, b) => (JOB_STAGE_RANK[a.o.status] ?? 9) - (JOB_STAGE_RANK[b.o.status] ?? 9) || (b.age ?? 0) - (a.age ?? 0));
+
+  document.getElementById("todayJobsCount").textContent = active.length ? `${active.length} active` : "";
+
+  const el = document.getElementById("todayJobs");
+  if (!active.length) {
+    el.innerHTML = `<div class="journal-empty">No active openings. Add some under Connections → Businesses.</div>`;
+    return;
+  }
+
+  // A short, specific nudge per opening — what (if anything) to do about it today.
+  const nudgeFor = ({ o, age }) => {
+    if (o.status === "offered") return "Offer pending — decide";
+    if (o.status === "interviewing") return "Prep / follow up";
+    if (o.status === "watching" && !o.reached_out) return "Reach out to a contact?";
+    if (o.status === "watching") return "Ready to apply?";
+    if ((o.status === "applied" || o.status === "heard_back") && age != null && age >= JOB_STALE_DAYS) return `No movement in ${age}d — follow up?`;
+    return null;
+  };
+
+  el.innerHTML = active.map((it) => {
+    const nudge = nudgeFor(it);
+    return `
+      <div class="today-row">
+        <div class="today-row-main">
+          <div class="today-row-title">
+            ${escHtml(it.o.title || "Untitled opening")}
+            ${it.o.url ? `<a class="job-opening-url-link" href="${escHtml(it.o.url)}" target="_blank" rel="noopener noreferrer" title="Open posting">↗</a>` : ""}
+          </div>
+          <div class="today-row-sub">
+            ${escHtml(nameFor(it.o.business_id))}${it.age != null ? ` · ${it.age}d in stage` : ""}${it.o.reached_out ? " · reached out" : ""}
+          </div>
+          ${nudge ? `<div class="today-nudge">${escHtml(nudge)}</div>` : ""}
+        </div>
+        <span class="job-status-badge status-${it.o.status}">${escHtml(JOB_STATUS_LABELS[it.o.status] || it.o.status)}</span>
+      </div>
+    `;
+  }).join("") + `<button type="button" class="today-link-btn" id="todayJobsOpenBtn">Open pipeline →</button>`;
+
+  document.getElementById("todayJobsOpenBtn").addEventListener("click", () => {
+    activateTab("connections");
+    activateConnectionsSubtab("businesses");
+  });
+}
+
+// ---------- food & exercise ----------
+function renderTodayHealth(todayStr) {
+  const { logRows, planRows } = todayData;
+  const today = logRows.filter((r) => r.log_date === todayStr);
+
+  let cal = 0, prot = 0, hasCal = false, missing = 0, foodCount = 0;
+  let exCal = 0, exMin = 0, exCount = 0, waterOz = 0;
+  today.forEach((r) => {
+    const v = categoryValue(r, r.details || "");
+    if (r.category === "Food & Drink") {
+      foodCount++;
+      if (r.calories == null && r.est_calories == null) missing++;
+      if (v.cal != null) { cal += v.cal; hasCal = true; }
+      if (v.prot != null) prot += v.prot;
+    } else if (r.category === "Exercise") {
+      exCount++;
+      if (v.cal != null) exCal += v.cal;
+      if (v.min != null) exMin += v.min;
+    } else if (r.category === "Water") {
+      if (v.oz != null) waterOz += v.oz;
+    }
+  });
+
+  // Same food-vs-drink split as the Health tab's "Last food" card.
+  const lastFood = [...logRows].reverse().find((r) => r.category === "Food & Drink" && !isDrinkOnly(r.details));
+  const lastFoodDate = lastFood ? parseLogTimeToDate(lastFood.log_date, lastFood.log_time) : null;
+
+  const pending = planRows.filter((p) => !p.logged_daily_log_id);
+  const pendingCal = pending.reduce((s, p) => s + (numOrNull(p.est_calories) || 0), 0);
+  const pendingProt = pending.reduce((s, p) => s + (numOrNull(p.est_protein_g) || 0), 0);
+
+  const cards = [
+    { label: "Calories in", value: hasCal ? Math.round(cal) : "—", sub: missing ? `${missing} not yet estimated` : `${foodCount} food log${foodCount === 1 ? "" : "s"}`, cls: missing ? "warn" : "" },
+    { label: "Net calories", value: hasCal ? Math.round(cal - exCal) : "—", sub: `${Math.round(exCal)} burned` },
+    { label: "Protein", value: prot ? Math.round(prot) + " g" : "—", sub: pending.length ? `+${Math.round(pendingProt)} g planned` : "AI estimate" },
+    { label: "Exercise", value: exMin ? Math.round(exMin) + " min" : "—", sub: exCount ? `${exCount} session${exCount === 1 ? "" : "s"}` : "not logged yet", cls: exCount ? "" : "warn" },
+    { label: "Water", value: waterOz ? waterOz + " oz" : "—", sub: waterOz ? "logged today" : "not logged yet" },
+    {
+      label: "Last food",
+      value: lastFoodDate ? formatElapsedSince(lastFoodDate).replace(" since last food", "") : "—",
+      sub: lastFood ? escHtml((lastFood.details || "").slice(0, 40)) : "nothing recent",
+    },
+  ];
+
+  document.getElementById("todayHealthCards").innerHTML = cards.map((c) => `
+    <div class="card ${c.cls || ""}">
+      <div class="label">${c.label}</div>
+      <div class="value">${c.value}</div>
+      <div class="sub">${c.sub}</div>
+    </div>
+  `).join("");
+
+  document.getElementById("todayPlanList").innerHTML = pending.length ? `
+    <div class="today-subhead">Still planned today <span class="hint">~${Math.round(pendingCal)} cal · ${Math.round(pendingProt)} g protein</span></div>
+    ${pending.map((p) => `
+      <div class="today-row">
+        <div class="today-row-main">
+          <div class="today-row-title">${escHtml(p.item)}</div>
+          <div class="today-row-sub">${escHtml(p.time_of_day)} · ${Math.round(numOrNull(p.est_calories) || 0)} cal · ${Math.round(numOrNull(p.est_protein_g) || 0)} g</div>
+        </div>
+      </div>
+    `).join("")}
+  ` : "";
+}
+
+document.getElementById("todayHealthOpenBtn").addEventListener("click", () => {
+  activateTab("health");
+  activateHealthSubtab("plan");
+});

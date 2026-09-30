@@ -735,7 +735,9 @@ document.getElementById("refreshBtn").addEventListener("click", loadData);
 const AUTO_REFRESH_MS = 60000;
 function refreshActiveTab() {
   if (!window.isAuthed) return;
-  if (!document.getElementById("app").classList.contains("hidden")) {
+  if (!document.getElementById("todayApp").classList.contains("hidden")) {
+    loadTodayData();
+  } else if (!document.getElementById("app").classList.contains("hidden")) {
     loadData();
   } else if (typeof spiritualLoaded !== "undefined" && spiritualLoaded) {
     loadSpiritualData();
