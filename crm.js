@@ -183,13 +183,13 @@ function renderPeopleTable() {
 }
 
 function bindPeopleRowEvents() {
-  document.querySelectorAll(".job-company-name-btn").forEach((btn) => {
+  document.querySelectorAll("#peopleTableBody .job-company-name-btn").forEach((btn) => {
     btn.addEventListener("click", () => openPersonDrawer(btn.closest("[data-person-id]").dataset.personId));
   });
-  document.querySelectorAll(".job-company-remove").forEach((btn) => {
-    btn.addEventListener("click", () => removePerson(btn));
+  document.querySelectorAll("#peopleTableBody .job-company-remove").forEach((btn) => {
+    btn.addEventListener("click", () => removePerson(btn.closest("[data-person-id]").dataset.personId));
   });
-  document.querySelectorAll(".celebrated-checkbox").forEach((checkbox) => {
+  document.querySelectorAll("#peopleTableBody .celebrated-checkbox").forEach((checkbox) => {
     checkbox.addEventListener("change", () => updateCelebrated(checkbox));
   });
 }
@@ -228,8 +228,8 @@ document.getElementById("addPersonForm").addEventListener("submit", async (e) =>
   await loadCrmData();
 });
 
-async function removePerson(btn) {
-  const personId = btn.closest("[data-person-id]").dataset.personId;
+async function removePerson(personId) {
+  personId = String(personId);
   const person = people.find((p) => String(p.id) === personId);
   if (!confirm(`Remove ${person.name}?`)) return;
 
@@ -237,6 +237,8 @@ async function removePerson(btn) {
   if (error) { alert("Failed to remove person: " + error.message); return; }
   if (String(openPersonId) === personId) closePersonDrawer();
   await loadCrmData();
+  // Drop their contact badge from the Businesses subtab too.
+  if (typeof loadBusinessesData === "function") loadBusinessesData();
 }
 
 // ---------- person detail rail ----------
@@ -270,6 +272,10 @@ function closePersonDrawer() {
 document.getElementById("personDrawerCloseBtn").addEventListener("click", closePersonDrawer);
 document.getElementById("personBackdrop").addEventListener("click", closePersonDrawer);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openPersonId != null) closePersonDrawer(); });
+
+document.getElementById("personRemoveBtn").addEventListener("click", () => {
+  if (openPersonId != null) removePerson(openPersonId);
+});
 
 document.getElementById("personDetailsForm").addEventListener("submit", async (e) => {
   e.preventDefault();

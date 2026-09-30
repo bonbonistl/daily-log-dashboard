@@ -272,10 +272,10 @@ function renderJobOpening(o) {
 }
 
 function bindBusinessRowEvents() {
-  document.querySelectorAll(".job-company-name-btn").forEach((btn) => {
+  document.querySelectorAll("#businessesTableBody .job-company-name-btn").forEach((btn) => {
     btn.addEventListener("click", () => openBusinessDrawer(btn.closest("[data-business-id]").dataset.businessId));
   });
-  document.querySelectorAll(".job-company-remove").forEach((btn) => {
+  document.querySelectorAll("#businessesTableBody .job-company-remove").forEach((btn) => {
     btn.addEventListener("click", () => removeBusiness(btn));
   });
   document.querySelectorAll(".pmf-checkbox").forEach((checkbox) => {
