@@ -1589,6 +1589,19 @@ button:hover { border-color: var(--accent); }
 .today-row-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .today-row-highlight .today-row-title { color: var(--accent); font-weight: 600; }
 .today-row-belated .today-row-sub { color: var(--warn); }
+.today-person-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 0.15s;
+}
+.today-person-btn:hover { text-decoration-color: var(--accent); }
 .today-nudge { font-size: 12px; color: var(--accent3); margin-top: 3px; }
 
 .today-celebrate {

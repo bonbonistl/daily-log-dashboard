@@ -239,6 +239,7 @@ async function removePerson(personId) {
   await loadCrmData();
   // Drop their contact badge from the Businesses subtab too.
   if (typeof loadBusinessesData === "function") loadBusinessesData();
+  if (typeof todayLoadedOnce !== "undefined" && todayLoadedOnce) loadTodayData();
 }
 
 // ---------- person detail rail ----------
@@ -297,4 +298,6 @@ document.getElementById("personDetailsForm").addEventListener("submit", async (e
   const { error } = await sb.from("people").update(update).eq("id", openPersonId);
   if (error) { alert("Failed to save contact details: " + error.message); return; }
   await loadCrmData();
+  // The rail can be opened from the Today dashboard's birthdays — keep that in sync.
+  if (typeof todayLoadedOnce !== "undefined" && todayLoadedOnce) loadTodayData();
 });

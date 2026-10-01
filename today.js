@@ -244,7 +244,7 @@ function renderTodayBirthdays(now) {
   el.innerHTML = entries.map((e) => `
     <div class="today-row ${e.info.diff === 0 ? "today-row-highlight" : ""} ${e.info.diff < 0 ? "today-row-belated" : ""}">
       <div class="today-row-main">
-        <div class="today-row-title">${escHtml(e.p.name)}</div>
+        <button type="button" class="today-row-title today-person-btn" data-person-id="${e.p.id}">${escHtml(e.p.name)}</button>
         <div class="today-row-sub">${whenLabel(e.info.diff, e.info.date)}</div>
       </div>
       ${e.info.diff <= 0 ? `
@@ -258,6 +258,16 @@ function renderTodayBirthdays(now) {
   el.querySelectorAll(".today-celebrate input").forEach((cb) => {
     cb.addEventListener("change", () => updateTodayCelebrated(cb));
   });
+  el.querySelectorAll(".today-person-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openTodayPerson(btn.dataset.personId));
+  });
+}
+
+// The person rail lives in crm.js and reads its full `people` list, so make sure
+// that's loaded (Today only fetches name/birthday) before opening it.
+async function openTodayPerson(personId) {
+  if (!crmLoadedOnce || !people.some((p) => String(p.id) === personId)) await loadCrmData();
+  openPersonDrawer(personId);
 }
 
 async function updateTodayCelebrated(cb) {
@@ -382,17 +392,41 @@ function renderTodayHealth(todayStr) {
     </div>
   `).join("");
 
-  document.getElementById("todayPlanList").innerHTML = pending.length ? `
-    <div class="today-subhead">Still planned today <span class="hint">~${Math.round(pendingCal)} cal · ${Math.round(pendingProt)} g protein</span></div>
-    ${pending.map((p) => `
-      <div class="today-row">
-        <div class="today-row-main">
-          <div class="today-row-title">${escHtml(p.item)}</div>
-          <div class="today-row-sub">${escHtml(p.time_of_day)} · ${Math.round(numOrNull(p.est_calories) || 0)} cal · ${Math.round(numOrNull(p.est_protein_g) || 0)} g</div>
-        </div>
-      </div>
-    `).join("")}
+  const planEl = document.getElementById("todayPlanList");
+  const order = (p) => PLAN_TIME_SLOTS.indexOf(p.time_of_day);
+  const plan = [...planRows].sort((a, b) => order(a) - order(b) || a.id - b.id);
+  planEl.innerHTML = plan.length ? `
+    <div class="today-subhead">Food plan <span class="hint">${pending.length ? `~${Math.round(pendingCal)} cal · ${Math.round(pendingProt)} g protein left` : "all eaten"}</span></div>
+    <div class="rol-checklist">
+      ${plan.map((p) => `
+        <label class="rol-item ${p.logged_daily_log_id ? "done" : ""}" data-id="${p.id}">
+          <input type="checkbox" ${p.logged_daily_log_id ? "checked" : ""} />
+          <span>${escHtml(p.item)}
+            <span class="plan-item-macro">${Math.round(numOrNull(p.est_calories) || 0)} cal · ${Math.round(numOrNull(p.est_protein_g) || 0)} g protein</span>
+          </span>
+          <span class="today-item-tag">${escHtml(p.time_of_day)}</span>
+        </label>
+      `).join("")}
+    </div>
   ` : "";
+
+  planEl.querySelectorAll(".rol-item").forEach((label) => {
+    label.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (label.dataset.busy) return;
+      toggleTodayPlanItem(label);
+    });
+  });
+}
+
+async function toggleTodayPlanItem(label) {
+  label.dataset.busy = "1";
+  const item = todayData.planRows.find((p) => String(p.id) === label.dataset.id);
+  const error = await setPlanItemLogged(item, item.log_date);
+  if (error) { alert("Failed to update: " + error.message); delete label.dataset.busy; return; }
+  await loadTodayData();
+  // Keep the Health tab (overview totals + Plan subtab) in sync if it's already loaded.
+  if (typeof healthLoadedOnce !== "undefined" && healthLoadedOnce) loadData();
 }
 
 document.getElementById("todayHealthOpenBtn").addEventListener("click", () => {

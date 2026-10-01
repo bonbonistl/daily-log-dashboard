@@ -147,34 +147,38 @@ function renderPlanCards() {
 async function togglePlanItem(row) {
   if (row.dataset.busy) return;
   row.dataset.busy = "1";
-  const planId = row.dataset.id;
-  const loggedId = row.dataset.loggedId;
-
-  if (loggedId) {
-    const { error } = await sb.from("daily_log").delete().eq("id", loggedId);
-    if (error) { alert("Failed to update: " + error.message); delete row.dataset.busy; return; }
-    const { error: updateError } = await sb.from("food_plan").update({ logged_daily_log_id: null }).eq("id", planId);
-    if (updateError) { alert("Failed to update: " + updateError.message); delete row.dataset.busy; return; }
-  } else {
-    const item = planRows.find((r) => String(r.id) === planId);
-    // Carry the plan's estimate over as the journal entry's own estimate (est_calories/
-    // est_protein_g), not the real calories/protein_g columns — those are reserved for
-    // precise logged values, and a plan estimate is still just an estimate.
-    const { data: inserted, error } = await sb.from("daily_log")
-      .insert({
-        log_date: planViewDate, log_time: nowTimeStr(), category: "Food & Drink", details: item.item,
-        est_calories: item.est_calories, est_protein_g: item.est_protein_g,
-      })
-      .select().single();
-    if (error) { alert("Failed to log: " + error.message); delete row.dataset.busy; return; }
-    const { error: updateError } = await sb.from("food_plan").update({ logged_daily_log_id: inserted.id }).eq("id", planId);
-    if (updateError) { alert("Failed to update: " + updateError.message); delete row.dataset.busy; return; }
-  }
+  const item = planRows.find((r) => String(r.id) === row.dataset.id);
+  const error = await setPlanItemLogged(item, planViewDate);
+  if (error) { alert("Failed to update: " + error.message); delete row.dataset.busy; return; }
 
   // A logged/unlogged item changes the actual journal (Today panel, journal drawer),
   // not just the plan — refresh the whole health view, which re-renders the plan too.
   if (typeof loadData === "function") await loadData();
   else await renderFoodPlanDeepDive();
+}
+
+// Flips a plan item between planned and eaten. Shared with the Today dashboard.
+// Checking inserts a real daily_log row and links it; unchecking deletes that row.
+// Returns a Supabase error, or null on success.
+async function setPlanItemLogged(item, logDate) {
+  if (item.logged_daily_log_id) {
+    const { error } = await sb.from("daily_log").delete().eq("id", item.logged_daily_log_id);
+    if (error) return error;
+    const { error: updateError } = await sb.from("food_plan").update({ logged_daily_log_id: null }).eq("id", item.id);
+    return updateError;
+  }
+  // Carry the plan's estimate over as the journal entry's own estimate (est_calories/
+  // est_protein_g), not the real calories/protein_g columns — those are reserved for
+  // precise logged values, and a plan estimate is still just an estimate.
+  const { data: inserted, error } = await sb.from("daily_log")
+    .insert({
+      log_date: logDate, log_time: nowTimeStr(), category: "Food & Drink", details: item.item,
+      est_calories: item.est_calories, est_protein_g: item.est_protein_g,
+    })
+    .select().single();
+  if (error) return error;
+  const { error: updateError } = await sb.from("food_plan").update({ logged_daily_log_id: inserted.id }).eq("id", item.id);
+  return updateError;
 }
 
 async function removePlanItem(row) {
