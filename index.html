@@ -430,7 +430,7 @@
           <input type="text" id="newBusinessName" placeholder="Business name" maxlength="200" required />
           <button type="submit">Add Business</button>
         </form>
-        <p class="hint drawer-hint">Click a business name to add a careers link and notes.</p>
+        <p class="hint drawer-hint">Click a business name to add a careers link and notes. Auto-declined and "Not a Match" openings move to the Job Listing Archive at the bottom of this page (or click the Archive card).</p>
 
         <div class="table-filter-row">
           <input type="text" id="businessFilterInput" placeholder="Filter by name, contact, or careers link…" />
@@ -454,7 +454,7 @@
 
         <details class="job-archive" id="jobArchive">
           <summary>Job Listing Archive <span id="jobArchiveCount" class="hint"></span></summary>
-          <p class="hint drawer-hint">Openings marked "Not a Match" — hidden from the pipeline above.</p>
+          <p class="hint drawer-hint">Openings marked "Auto-Declined" or "Not a Match" — hidden from the pipeline above. Click a title to edit it, or restore it to Watching.</p>
           <div id="jobArchiveList" class="job-openings-list"></div>
         </details>
       </section>

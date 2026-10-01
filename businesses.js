@@ -20,7 +20,7 @@ const JOB_STATUS_LABELS = Object.fromEntries(JOB_STATUSES.map((s) => [s.key, s.l
 
 // Openings in these statuses drop out of the pipeline (cards, table, counts) and
 // show only in the Job Listing Archive below the table.
-const ARCHIVED_JOB_STATUSES = ["not_a_match"];
+const ARCHIVED_JOB_STATUSES = ["auto_declined", "not_a_match"];
 const isArchivedOpening = (o) => ARCHIVED_JOB_STATUSES.includes(o.status);
 const activeJobOpenings = () => jobOpenings.filter((o) => !isArchivedOpening(o));
 
@@ -98,6 +98,7 @@ function renderBusinessesCards() {
     { label: "Heard Back", value: `${heardBack}`, sub: heardBack ? "awaiting next step" : "none yet", funnel: "heard_back" },
     { label: "Interviewed", value: `${interviewing}`, sub: interviewing ? "in progress" : "none right now", funnel: "interviewing" },
     { label: "Offers", value: `${offered}`, sub: offered ? "awaiting decision" : "none right now", funnel: "offered" },
+    { label: "Archive", value: `${jobOpenings.length - active.length}`, sub: "view archive ↓", funnel: "archive" },
   ].map((c) => `
     <button type="button" class="card card-clickable ${businessFunnelFilter === c.funnel ? "card-active" : ""}" data-funnel="${c.funnel || ""}">
       <div class="label">${c.label}</div>
@@ -109,6 +110,7 @@ function renderBusinessesCards() {
   document.querySelectorAll("#businessesCards .card-clickable").forEach((btn) => {
     btn.addEventListener("click", () => {
       const funnel = btn.dataset.funnel || null;
+      if (funnel === "archive") { showJobArchive(); return; }
       businessFunnelFilter = businessFunnelFilter === funnel ? null : funnel;
       renderBusinessesCards();
       renderBusinessesTable();
@@ -256,6 +258,12 @@ function renderBusinessesTable() {
 }
 
 // ---------- job listing archive ----------
+function showJobArchive() {
+  const archiveEl = document.getElementById("jobArchive");
+  archiveEl.open = true;
+  archiveEl.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function renderJobArchive() {
   const archived = jobOpenings
     .filter(isArchivedOpening)
@@ -265,7 +273,7 @@ function renderJobArchive() {
   document.getElementById("jobArchiveCount").textContent = archived.length ? `(${archived.length})` : "";
   const listEl = document.getElementById("jobArchiveList");
   if (!archived.length) {
-    listEl.innerHTML = `<div class="journal-empty">Nothing archived. Set an opening's status to "Not a Match" to move it here.</div>`;
+    listEl.innerHTML = `<div class="journal-empty">Nothing archived. Set an opening's status to "Auto-Declined" or "Not a Match" to move it here.</div>`;
     return;
   }
 
@@ -277,7 +285,7 @@ function renderJobArchive() {
         <span class="job-table-sub">${bizName[o.business_id] || ""}</span>
         <span class="job-status-badge status-${o.status}">${JOB_STATUS_LABELS[o.status]}</span>
       </div>
-      <div class="job-opening-meta">archived ${fmtShort(o.status_changed_at.slice(0, 10))}</div>
+      <div class="job-opening-meta">${o.status_changed_at ? `archived ${fmtShort(o.status_changed_at.slice(0, 10))}` : ""}</div>
       <div class="job-opening-controls">
         <button type="button" class="job-archive-restore">Restore to Watching</button>
         <button type="button" class="job-opening-remove" title="Delete opening">&times;</button>
