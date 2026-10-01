@@ -501,6 +501,7 @@ function openBusinessDrawer(businessId) {
   openBusinessId = business.id;
 
   document.getElementById("businessDrawerTitle").textContent = business.name;
+  document.getElementById("businessName").value = business.name;
   document.getElementById("businessCareersUrl").value = business.careers_url || "";
   document.getElementById("businessGeneralNotes").value = business.notes || "";
 
@@ -531,12 +532,15 @@ document.getElementById("businessDetailsForm").addEventListener("submit", async 
   if (openBusinessId == null) return;
 
   const update = {
+    name: document.getElementById("businessName").value.trim(),
     careers_url: document.getElementById("businessCareersUrl").value.trim() || null,
     notes: document.getElementById("businessGeneralNotes").value.trim() || null,
   };
+  if (!update.name) { alert("Business name can't be empty."); return; }
 
   const { error } = await sb.from("businesses").update(update).eq("id", openBusinessId);
   if (error) { alert("Failed to save business details: " + error.message); return; }
+  document.getElementById("businessDrawerTitle").textContent = update.name;
   await loadBusinessesData();
 });
 
