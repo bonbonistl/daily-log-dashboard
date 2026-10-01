@@ -1357,6 +1357,7 @@ button:hover { border-color: var(--accent); }
 .job-status-badge.status-offered { background: rgba(15, 118, 110, 0.14); color: var(--accent); }
 .job-status-badge.status-declined,
 .job-status-badge.status-auto_declined { background: rgba(220, 38, 38, 0.12); color: var(--danger); }
+.job-status-badge.status-not_a_match { background: var(--panel-border); color: var(--muted); }
 
 .add-opening-form {
   display: flex;
@@ -1628,3 +1629,9 @@ button:hover { border-color: var(--accent); }
 @media (max-width: 860px) {
   .today-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------- Job listing archive (Businesses) ---------- */
+.job-archive { margin-top: 20px; }
+.job-archive summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.job-archive-item .job-table-sub { margin-top: 0; }
+.job-archive-restore { font-size: 12px; }

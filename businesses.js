@@ -14,8 +14,15 @@ const JOB_STATUSES = [
   { key: "offered", label: "Offered" },
   { key: "declined", label: "Declined" },
   { key: "auto_declined", label: "Auto-Declined" },
+  { key: "not_a_match", label: "Not a Match" },
 ];
 const JOB_STATUS_LABELS = Object.fromEntries(JOB_STATUSES.map((s) => [s.key, s.label]));
+
+// Openings in these statuses drop out of the pipeline (cards, table, counts) and
+// show only in the Job Listing Archive below the table.
+const ARCHIVED_JOB_STATUSES = ["not_a_match"];
+const isArchivedOpening = (o) => ARCHIVED_JOB_STATUSES.includes(o.status);
+const activeJobOpenings = () => jobOpenings.filter((o) => !isArchivedOpening(o));
 
 const escAttr = (s) => (s || "").replace(/"/g, "&quot;");
 
@@ -62,6 +69,7 @@ async function loadBusinessesData() {
 function renderBusinessesTab() {
   renderBusinessesCards();
   renderBusinessesTable();
+  renderJobArchive();
 }
 
 // null = no funnel filter (Companies), otherwise "tracked" or a JOB_STATUSES key
@@ -76,7 +84,8 @@ const FUNNEL_FILTER_LABELS = {
 };
 
 function renderBusinessesCards() {
-  const countByStatus = (key) => jobOpenings.filter((o) => o.status === key).length;
+  const active = activeJobOpenings();
+  const countByStatus = (key) => active.filter((o) => o.status === key).length;
   const applied = countByStatus("applied");
   const heardBack = countByStatus("heard_back");
   const interviewing = countByStatus("interviewing");
@@ -84,7 +93,7 @@ function renderBusinessesCards() {
 
   document.getElementById("businessesCards").innerHTML = [
     { label: "Companies", value: `${businesses.length}`, sub: "tracked", funnel: null },
-    { label: "Tracked", value: `${jobOpenings.length}`, sub: "opening(s)", funnel: "tracked" },
+    { label: "Tracked", value: `${active.length}`, sub: "opening(s)", funnel: "tracked" },
     { label: "Applied", value: `${applied}`, sub: applied ? "in progress" : "none yet", funnel: "applied" },
     { label: "Heard Back", value: `${heardBack}`, sub: heardBack ? "awaiting next step" : "none yet", funnel: "heard_back" },
     { label: "Interviewed", value: `${interviewing}`, sub: interviewing ? "in progress" : "none right now", funnel: "interviewing" },
@@ -127,7 +136,7 @@ const BUSINESS_SORT_VALUE = {
   pmf: (b) => (b.pmf ? 1 : 0),
   contacts: (b) => businessPeople.filter((p) => p.business_id === b.id).length,
   careers: (b) => (b.careers_url ? 1 : 0),
-  openings: (b) => jobOpenings.filter((o) => o.business_id === b.id).length,
+  openings: (b) => activeJobOpenings().filter((o) => o.business_id === b.id).length,
 };
 
 function getVisibleBusinesses() {
@@ -137,7 +146,7 @@ function getVisibleBusinesses() {
   const filtered = businesses.filter((b) => {
     if (pmfOnly && !b.pmf) return false;
     if (businessFunnelFilter) {
-      const bizOpenings = jobOpenings.filter((o) => o.business_id === b.id);
+      const bizOpenings = activeJobOpenings().filter((o) => o.business_id === b.id);
       const inStage = businessFunnelFilter === "tracked"
         ? bizOpenings.length > 0
         : bizOpenings.some((o) => o.status === businessFunnelFilter);
@@ -210,7 +219,7 @@ function renderBusinessesTable() {
   }
 
   bodyEl.innerHTML = visible.map((b) => {
-    const openings = jobOpenings.filter((o) => o.business_id === b.id);
+    const openings = activeJobOpenings().filter((o) => o.business_id === b.id);
     const contacts = businessPeople.filter((p) => p.business_id === b.id);
 
     const contactsCell = contacts.length
@@ -244,6 +253,54 @@ function renderBusinessesTable() {
   }).join("");
 
   bindBusinessRowEvents();
+}
+
+// ---------- job listing archive ----------
+function renderJobArchive() {
+  const archived = jobOpenings
+    .filter(isArchivedOpening)
+    .sort((a, b) => (b.status_changed_at || "").localeCompare(a.status_changed_at || ""));
+  const bizName = Object.fromEntries(businesses.map((b) => [b.id, b.name]));
+
+  document.getElementById("jobArchiveCount").textContent = archived.length ? `(${archived.length})` : "";
+  const listEl = document.getElementById("jobArchiveList");
+  if (!archived.length) {
+    listEl.innerHTML = `<div class="journal-empty">Nothing archived. Set an opening's status to "Not a Match" to move it here.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = archived.map((o) => `
+    <div class="job-opening job-archive-item" data-opening-id="${o.id}">
+      <div class="job-opening-main">
+        <button type="button" class="job-opening-title-btn">${o.title}</button>
+        ${o.url ? `<a class="job-opening-url-link" href="${o.url}" target="_blank" rel="noopener noreferrer" title="Open posting">↗</a>` : ""}
+        <span class="job-table-sub">${bizName[o.business_id] || ""}</span>
+        <span class="job-status-badge status-${o.status}">${JOB_STATUS_LABELS[o.status]}</span>
+      </div>
+      <div class="job-opening-meta">archived ${fmtShort(o.status_changed_at.slice(0, 10))}</div>
+      <div class="job-opening-controls">
+        <button type="button" class="job-archive-restore">Restore to Watching</button>
+        <button type="button" class="job-opening-remove" title="Delete opening">&times;</button>
+      </div>
+    </div>
+  `).join("");
+
+  listEl.querySelectorAll(".job-opening-title-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openOpeningDrawer(btn.closest("[data-opening-id]").dataset.openingId));
+  });
+  listEl.querySelectorAll(".job-opening-remove").forEach((btn) => {
+    btn.addEventListener("click", () => removeJobOpening(btn.closest("[data-opening-id]").dataset.openingId));
+  });
+  listEl.querySelectorAll(".job-archive-restore").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      const { error } = await sb.from("job_openings")
+        .update({ status: "watching", status_changed_at: new Date().toISOString() })
+        .eq("id", btn.closest("[data-opening-id]").dataset.openingId);
+      if (error) { alert("Failed to restore opening: " + error.message); btn.disabled = false; return; }
+      await loadBusinessesData();
+    });
+  });
 }
 
 function renderJobOpening(o) {

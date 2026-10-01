@@ -16,7 +16,7 @@ const TODAY_SLOT_STARTS = {
 };
 const BIRTHDAY_LOOKAHEAD_DAYS = 7;
 const BIRTHDAY_BELATED_DAYS = 3;
-const INACTIVE_JOB_STATUSES = ["declined", "auto_declined"];
+const INACTIVE_JOB_STATUSES = ["declined", "auto_declined", "not_a_match"];
 // Pipeline order, furthest along first — an offer matters more than something you're watching.
 const JOB_STAGE_RANK = { offered: 0, interviewing: 1, heard_back: 2, applied: 3, watching: 4 };
 const JOB_STALE_DAYS = 10;
