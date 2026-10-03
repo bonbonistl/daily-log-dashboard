@@ -127,6 +127,7 @@ button:hover { border-color: var(--accent); }
 .cell.logged { background: var(--accent); }
 .cell.missing { background: var(--panel-border); }
 .cell.not-scheduled { background: none; border: 1px dashed var(--panel-border); }
+.cell.skipped { background: repeating-linear-gradient(45deg, var(--panel-border) 0 2px, transparent 2px 5px); }
 
 .gaps-list {
   margin-top: 16px;
@@ -397,6 +398,26 @@ button:hover { border-color: var(--accent); }
   border-color: var(--accent);
   background: rgba(15, 118, 110, 0.1);
 }
+.rol-item.skipped { opacity: 0.6; }
+.rol-item.skipped .rol-item-name { text-decoration: line-through; color: var(--muted); }
+.rol-skip-btn {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.today-item-tag + .rol-skip-btn { margin-left: 0; }
+.rol-item:hover .rol-skip-btn, .rol-item.skipped .rol-skip-btn { opacity: 1; }
+.rol-skip-btn:hover { border-color: var(--accent); color: var(--accent); }
+.rol-item.done .rol-skip-btn { display: none; }
+@media (hover: none) { .rol-skip-btn { opacity: 1; } }
 .rol-item input[type="checkbox"] {
   width: 18px;
   height: 18px;

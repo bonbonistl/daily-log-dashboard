@@ -72,7 +72,7 @@ function dayCaloriesAndAlcohol(logDate) {
 }
 
 function dayPracticesDone(logDate) {
-  const done = new Set(insightsRolRows.filter((r) => r.log_date === logDate).map((r) => r.practice));
+  const done = new Set(insightsRolRows.filter((r) => r.log_date === logDate && !r.skipped).map((r) => r.practice));
   return done;
 }
 

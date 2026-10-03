@@ -118,31 +118,26 @@ function renderTodayHabits(now, todayStr) {
       .filter((p) => p[TIME_KEY[time]] && practiceAppliesOnDate(p, todayStr))
       .map((p) => ({ p, time, row: habitLog.find((r) => r.time_of_day === time && r.practice === p.name) }));
 
-  const itemHtml = (it, extraLabel) => `
-    <label class="rol-item ${it.row ? "done" : ""}" data-time="${escHtml(it.time)}" data-practice="${escHtml(it.p.name)}" data-id="${it.row ? it.row.id : ""}">
-      <input type="checkbox" ${it.row ? "checked" : ""} />
-      <span>${escHtml(practiceLabel(it.p))}</span>
-      ${extraLabel ? `<span class="today-item-tag">${escHtml(extraLabel)}</span>` : ""}
-    </label>
-  `;
+  const itemHtml = (it, extraLabel) => habitItemHtml(it.p, it.time, it.row, extraLabel);
 
   const nowItems = slotItems(current);
   const earlierOpen = TIMES_OF_DAY.slice(0, currentIdx).flatMap(slotItems).filter((it) => !it.row);
   const laterItems = TIMES_OF_DAY.slice(currentIdx + 1).flatMap(slotItems);
 
-  const allToday = TIMES_OF_DAY.flatMap(slotItems);
+  const allToday = TIMES_OF_DAY.flatMap(slotItems).filter((it) => !(it.row && it.row.skipped));
   const doneToday = allToday.filter((it) => it.row).length;
   document.getElementById("todayHabitsProgress").textContent = allToday.length ? `${doneToday}/${allToday.length} done today` : "";
   document.getElementById("todayHabitsHeading").textContent = `Habits — ${current}`;
 
-  const nowDone = nowItems.filter((it) => it.row).length;
+  const nowDue = nowItems.filter((it) => !(it.row && it.row.skipped));
+  const nowDone = nowDue.filter((it) => it.row).length;
   let html = `
-    <div class="today-subhead">Now <span class="hint">${nowItems.length ? `${nowDone}/${nowItems.length}` : ""}</span></div>
+    <div class="today-subhead">Now <span class="hint">${nowDue.length ? `${nowDone}/${nowDue.length}` : ""}</span></div>
     <div class="rol-checklist">
       ${nowItems.length ? nowItems.map((it) => itemHtml(it)).join("") : `<div class="journal-empty">Nothing scheduled for ${current.toLowerCase()}.</div>`}
     </div>
   `;
-  if (nowItems.length && nowDone === nowItems.length) {
+  if (nowItems.length && nowItems.every((it) => it.row)) {
     html = `<div class="today-allclear">✓ All ${current.toLowerCase()} habits done</div>` + html;
   }
 
@@ -166,30 +161,16 @@ function renderTodayHabits(now, todayStr) {
   const el = document.getElementById("todayHabits");
   el.innerHTML = html;
 
-  el.querySelectorAll(".rol-item").forEach((label) => {
-    label.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (label.dataset.busy) return;
-      toggleTodayHabit(label);
-    });
+  wireHabitItems(el, todayLocalStr, async () => {
+    await loadTodayData();
+    // Keep the Habits tab in sync if it's already been opened this session.
+    if (typeof spiritualLoaded !== "undefined" && spiritualLoaded) loadSpiritualData();
   });
   const toggle = document.getElementById("todayUpcomingToggle");
   if (toggle) toggle.addEventListener("click", () => {
     todayShowUpcomingHabits = !todayShowUpcomingHabits;
     renderTodayHabits(new Date(), todayLocalStr());
   });
-}
-
-async function toggleTodayHabit(label) {
-  label.dataset.busy = "1";
-  const { time, practice, id } = label.dataset;
-  const { error } = id
-    ? await sb.from("rule_of_life_log").delete().eq("id", id)
-    : await sb.from("rule_of_life_log").insert({ log_date: todayLocalStr(), time_of_day: time, practice });
-  if (error) { alert("Failed to update: " + error.message); delete label.dataset.busy; return; }
-  await loadTodayData();
-  // Keep the Habits tab in sync if it's already been opened this session.
-  if (typeof spiritualLoaded !== "undefined" && spiritualLoaded) loadSpiritualData();
 }
 
 // ---------- birthdays ----------

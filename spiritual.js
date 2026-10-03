@@ -104,6 +104,58 @@ function practiceAppliesOnDate(p, dateStr) {
   return p.days.includes(new Date(dateStr + "T00:00:00").getDay());
 }
 
+// A rule_of_life_log row is either a check-off or (skipped = true) an intentional skip.
+// Skips are excused: they don't count as done, but they also drop out of the
+// "scheduled" denominator so they don't count against streaks/adherence.
+function rolDoneSet(rows) {
+  return new Set(rows.filter((r) => !r.skipped).map((r) => `${r.log_date}|${r.practice}`));
+}
+function rolSkippedSet(rows) {
+  const done = rolDoneSet(rows);
+  return new Set(rows.filter((r) => r.skipped).map((r) => `${r.log_date}|${r.practice}`).filter((k) => !done.has(k)));
+}
+
+// Shared check-in row used by the Habits tab and the Today dashboard.
+// Clicking the row toggles done; the Skip button toggles skipped.
+function habitItemHtml(p, time, row, extraLabel) {
+  const state = !row ? "" : row.skipped ? "skipped" : "done";
+  return `
+    <label class="rol-item ${state}" data-time="${escHtml(time)}" data-practice="${escHtml(p.name)}" data-id="${row ? row.id : ""}" data-state="${state}">
+      <input type="checkbox" ${state === "done" ? "checked" : ""} />
+      <span class="rol-item-name">${escHtml(practiceLabel(p))}</span>
+      ${extraLabel ? `<span class="today-item-tag">${escHtml(extraLabel)}</span>` : ""}
+      <button type="button" class="rol-skip-btn" title="${state === "skipped" ? "Undo skip" : "Skip this today"}">${state === "skipped" ? "Skipped" : "Skip"}</button>
+    </label>
+  `;
+}
+
+// Wires click handlers on every .rol-item in `container`. `getDate()` returns the
+// log_date to write; `onChange()` reloads whatever needs reloading afterward.
+function wireHabitItems(container, getDate, onChange) {
+  container.querySelectorAll(".rol-item").forEach((label) => {
+    label.addEventListener("click", async (e) => {
+      e.preventDefault();
+      if (label.dataset.busy) return;
+      const wantSkip = !!e.target.closest(".rol-skip-btn");
+      const cur = label.dataset.state; // "", "done", "skipped"
+      const target = wantSkip ? (cur === "skipped" ? "" : "skipped") : (cur === "done" ? "" : "done");
+      label.dataset.busy = "1";
+      const ok = await setHabitState(getDate(), label.dataset.time, label.dataset.practice, label.dataset.id, target);
+      if (!ok) { delete label.dataset.busy; return; }
+      await onChange();
+    });
+  });
+}
+
+async function setHabitState(date, time, practice, id, target) {
+  let res;
+  if (!target) res = await sb.from("rule_of_life_log").delete().eq("id", id);
+  else if (id) res = await sb.from("rule_of_life_log").update({ skipped: target === "skipped" }).eq("id", id);
+  else res = await sb.from("rule_of_life_log").insert({ log_date: date, time_of_day: time, practice, skipped: target === "skipped" });
+  if (res.error) { alert("Failed to update: " + res.error.message); return false; }
+  return true;
+}
+
 function renderCheckin() {
   const viewDate = getCheckinViewDate();
   const isToday = checkinDateOffset === 0;
@@ -115,26 +167,20 @@ function renderCheckin() {
 
   const html = TIMES_OF_DAY.map((time) => {
     const applicable = rolPractices.filter((p) => p[TIME_KEY[time]] && practiceAppliesOnDate(p, viewDate));
-    const doneCount = applicable.filter((p) => findRolRow(viewDate, time, p.name)).length;
-    const allDone = applicable.length > 0 && doneCount === applicable.length;
+    const rows = applicable.map((p) => findRolRow(viewDate, time, p.name));
+    const doneCount = rows.filter((r) => r && !r.skipped).length;
+    const skippedCount = rows.filter((r) => r && r.skipped).length;
+    const dueCount = applicable.length - skippedCount;
+    const allDone = applicable.length > 0 && rows.every((r) => r);
     const collapsed = checkinManualCollapse.hasOwnProperty(time) ? checkinManualCollapse[time] : allDone;
 
-    const items = applicable.map((p) => {
-      const row = findRolRow(viewDate, time, p.name);
-      const checked = !!row;
-      return `
-        <label class="rol-item ${checked ? "done" : ""}" data-time="${time}" data-practice="${p.name}" data-id="${row ? row.id : ""}">
-          <input type="checkbox" ${checked ? "checked" : ""} />
-          <span>${practiceLabel(p)}</span>
-        </label>
-      `;
-    }).join("");
+    const items = applicable.map((p, i) => habitItemHtml(p, time, rows[i])).join("");
     return `
       <div class="checkin-group ${collapsed ? "collapsed" : ""} ${allDone ? "all-done" : ""}" data-time="${time}">
         <button type="button" class="checkin-group-header">
           <span class="checkin-group-chevron">▾</span>
           <h3>${time}</h3>
-          ${applicable.length ? `<span class="checkin-group-count">${doneCount}/${applicable.length}</span>` : ""}
+          ${applicable.length ? `<span class="checkin-group-count">${doneCount}/${dueCount}${skippedCount ? ` · ${skippedCount} skipped` : ""}</span>` : ""}
         </button>
         <div class="rol-checklist">${applicable.length ? items : `<div class="journal-empty">No practices assigned to ${time.toLowerCase()}.</div>`}</div>
       </div>
@@ -152,33 +198,14 @@ function renderCheckin() {
     });
   });
 
-  document.querySelectorAll("#checkinGroups .rol-item").forEach((label) => {
-    label.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (label.dataset.busy) return;
-      toggleCheckin(label);
-    });
+  wireHabitItems(document.getElementById("checkinGroups"), getCheckinViewDate, async () => {
+    await loadSpiritualData();
+    // Keep the Today dashboard in sync if it's been opened.
+    if (typeof todayData !== "undefined" && todayData) loadTodayData();
   });
 
   renderDisruptionToday(viewDate);
   renderDisruptionSuggestions(viewDate);
-}
-
-async function toggleCheckin(label) {
-  const time = label.dataset.time;
-  const practice = label.dataset.practice;
-  const id = label.dataset.id;
-  const viewDate = getCheckinViewDate();
-
-  label.dataset.busy = "1";
-  if (id) {
-    const { error } = await sb.from("rule_of_life_log").delete().eq("id", id);
-    if (error) { alert("Failed to update: " + error.message); delete label.dataset.busy; return; }
-  } else {
-    const { error } = await sb.from("rule_of_life_log").insert({ log_date: viewDate, time_of_day: time, practice });
-    if (error) { alert("Failed to update: " + error.message); delete label.dataset.busy; return; }
-  }
-  await loadSpiritualData();
 }
 
 document.getElementById("checkinPrevBtn").addEventListener("click", () => {
@@ -199,11 +226,14 @@ function renderRolCards(todayStr) {
   const completeDays = days.filter((d) => d !== todayStr);
   // Practices can be scoped to specific days of the week, so "how many are due" varies by day.
   const scheduledCount = {};
-  days.forEach((d) => { scheduledCount[d] = rolPractices.filter((p) => practiceAppliesOnDate(p, d)).length; });
+  const skippedSet = rolSkippedSet(rolRows);
+  days.forEach((d) => {
+    scheduledCount[d] = rolPractices.filter((p) => practiceAppliesOnDate(p, d) && !skippedSet.has(`${d}|${p.name}`)).length;
+  });
 
   const perDayPractices = {};
   days.forEach((d) => { perDayPractices[d] = new Set(); });
-  rolRows.forEach((r) => { if (perDayPractices[r.log_date]) perDayPractices[r.log_date].add(r.practice); });
+  rolRows.forEach((r) => { if (!r.skipped && perDayPractices[r.log_date]) perDayPractices[r.log_date].add(r.practice); });
 
   const anyDay = (d) => perDayPractices[d] && perDayPractices[d].size > 0;
   const fullDay = (d) => scheduledCount[d] > 0 && perDayPractices[d] && perDayPractices[d].size === scheduledCount[d];
@@ -230,7 +260,7 @@ function renderRolCards(todayStr) {
     { label: "Today", value: `${todaySet.size}/${scheduledCount[todayStr] || 0}`, sub: "practices done so far" },
     { label: "Current streak", value: `${currentStreak} day${currentStreak === 1 ? "" : "s"}`, sub: "at least one practice", cls: "streak" },
     { label: "Longest streak", value: `${longestStreak} day${longestStreak === 1 ? "" : "s"}`, sub: `out of ${completeDays.length} days`, cls: "streak" },
-    { label: "Perfect days", value: `${perfectDays}`, sub: "all scheduled practices done" },
+    { label: "Perfect days", value: `${perfectDays}`, sub: "all scheduled practices done (skips excused)" },
     { label: "Adherence", value: `${adherencePct}%`, sub: `last ${completeDays.length} days`, cls: adherencePct < 50 ? "warn" : "" },
   ];
 
@@ -249,7 +279,8 @@ function renderRolGrid(todayStr) {
   grid.classList.add("rol");
   grid.style.setProperty("--days", days.length);
 
-  const doneSet = new Set(rolRows.map((r) => `${r.log_date}|${r.practice}`));
+  const doneSet = rolDoneSet(rolRows);
+  const skippedSet = rolSkippedSet(rolRows);
 
   let html = `<div class="row-label"></div>`;
   days.forEach((d) => { html += `<div class="date-label">${fmtShort(d)}</div>`; });
@@ -259,6 +290,10 @@ function renderRolGrid(todayStr) {
     days.forEach((d) => {
       if (!practiceAppliesOnDate(p, d)) {
         html += `<div class="cell not-scheduled" title="${p.name} on ${d}: not scheduled"></div>`;
+        return;
+      }
+      if (skippedSet.has(`${d}|${p.name}`)) {
+        html += `<div class="cell skipped" title="${p.name} on ${d}: skipped"></div>`;
         return;
       }
       const logged = doneSet.has(`${d}|${p.name}`);
@@ -271,10 +306,11 @@ function renderRolGrid(todayStr) {
 
 function renderRolBreakdown(todayStr) {
   const days = rolDayRange(todayStr).filter((d) => d !== todayStr);
-  const doneSet = new Set(rolRows.map((r) => `${r.log_date}|${r.practice}`));
+  const doneSet = rolDoneSet(rolRows);
+  const skippedSet = rolSkippedSet(rolRows);
 
   const rows = rolPractices.map((p) => {
-    const scheduledDays = days.filter((d) => practiceAppliesOnDate(p, d));
+    const scheduledDays = days.filter((d) => practiceAppliesOnDate(p, d) && !skippedSet.has(`${d}|${p.name}`));
     const doneDays = scheduledDays.filter((d) => doneSet.has(`${d}|${p.name}`)).length;
     const pct = scheduledDays.length ? Math.round((doneDays / scheduledDays.length) * 100) : 0;
     return { practice: practiceLabel(p), pct, doneDays, total: scheduledDays.length };
