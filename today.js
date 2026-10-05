@@ -1,8 +1,7 @@
 // "Today" dashboard — a time-aware landing page that pulls the few things that
 // matter right now from every other tab: habits due in the current time slot
-// (plus anything still open from earlier), today's/upcoming birthdays, timely
-// prayer requests, active
-// job openings, and today's food/exercise numbers. Fetches its own data rather
+// (plus anything still open from earlier), today's/upcoming birthdays, unanswered
+// prayer requests, active job openings, and today's food/exercise numbers. Fetches its own data rather
 // than depending on the other tabs' lazy loads, so it works as the first screen.
 
 // When each habit time slot "starts", in minutes after midnight. The current
@@ -21,14 +20,10 @@ const INACTIVE_JOB_STATUSES = ["declined", "auto_declined", "not_a_match"];
 // Pipeline order, furthest along first — an offer matters more than something you're watching.
 const JOB_STAGE_RANK = { offered: 0, interviewing: 1, heard_back: 2, applied: 3, watching: 4 };
 const JOB_STALE_DAYS = 10;
-// Prayer requests stay on the dashboard until marked answered. Ones dated within this
-// many days (or already past) show up front; further-out ones collapse under "Later".
-const PRAYER_LOOKAHEAD_DAYS = 7;
 
 let todayData = null; // { practices, habitLog, people, openings, businesses, logRows, planRows }
 let todayLoadedOnce = false;
 let todayShowUpcomingHabits = false;
-let todayShowLaterPrayers = false;
 
 const escHtml = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -282,8 +277,6 @@ function renderTodayPrayers(now) {
     r,
     diff: Math.round((new Date(r.pray_on + "T00:00:00") - midnight) / 86400000),
   }));
-  const timely = entries.filter((e) => e.diff <= PRAYER_LOOKAHEAD_DAYS);
-  const later = entries.filter((e) => e.diff > PRAYER_LOOKAHEAD_DAYS);
 
   document.getElementById("todayPrayerCount").textContent = entries.length ? `${entries.length} open` : "";
 
@@ -317,18 +310,8 @@ function renderTodayPrayers(now) {
     el.innerHTML = `<div class="journal-empty">No unanswered prayer requests. Add one from a person in Connections → CRM.</div>`;
     return;
   }
-  let html = timely.length
-    ? timely.map(rowHtml).join("")
-    : `<div class="journal-empty">Nothing in the next ${PRAYER_LOOKAHEAD_DAYS} days.</div>`;
-  if (later.length) {
-    html += `
-      <button type="button" class="today-toggle" id="todayLaterPrayersToggle">
-        ${todayShowLaterPrayers ? "▾" : "▸"} Later <span class="hint">${later.length}</span>
-      </button>
-      ${todayShowLaterPrayers ? later.map(rowHtml).join("") : ""}
-    `;
-  }
-  el.innerHTML = html;
+  // Every unanswered request stays visible until it's marked answered, in date order.
+  el.innerHTML = entries.map(rowHtml).join("");
 
   el.querySelectorAll("input[data-prayer-id]").forEach((cb) => {
     cb.addEventListener("change", async () => {
@@ -339,11 +322,6 @@ function renderTodayPrayers(now) {
   });
   el.querySelectorAll(".today-person-btn").forEach((btn) => {
     btn.addEventListener("click", () => openTodayPerson(btn.dataset.personId));
-  });
-  const toggle = document.getElementById("todayLaterPrayersToggle");
-  if (toggle) toggle.addEventListener("click", () => {
-    todayShowLaterPrayers = !todayShowLaterPrayers;
-    renderTodayPrayers(new Date());
   });
 }
 
