@@ -24,6 +24,8 @@ const JOB_STALE_DAYS = 10;
 let todayData = null; // { practices, habitLog, people, openings, businesses, logRows, planRows }
 let todayLoadedOnce = false;
 let todayShowUpcomingHabits = false;
+// Prayer requests are private — collapsed on every page load so nothing shows over your shoulder.
+let todayShowPrayers = false;
 
 const escHtml = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -310,8 +312,18 @@ function renderTodayPrayers(now) {
     el.innerHTML = `<div class="journal-empty">No unanswered prayer requests. Add one from a person in Connections → CRM.</div>`;
     return;
   }
-  // Every unanswered request stays visible until it's marked answered, in date order.
-  el.innerHTML = entries.map(rowHtml).join("");
+  // Every unanswered request stays listed until it's marked answered, in date order —
+  // but hidden behind a toggle until you choose to show them.
+  el.innerHTML = `
+    <button type="button" class="today-toggle today-prayer-toggle" id="todayPrayersToggle">
+      ${todayShowPrayers ? "▾ Hide" : "▸ Show"} prayer requests
+    </button>
+    ${todayShowPrayers ? entries.map(rowHtml).join("") : ""}
+  `;
+  document.getElementById("todayPrayersToggle").addEventListener("click", () => {
+    todayShowPrayers = !todayShowPrayers;
+    renderTodayPrayers(new Date());
+  });
 
   el.querySelectorAll("input[data-prayer-id]").forEach((cb) => {
     cb.addEventListener("change", async () => {

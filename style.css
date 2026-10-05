@@ -1677,3 +1677,4 @@ button:hover { border-color: var(--accent); }
 #personNoteForm, #personPrayerForm { gap: 0; }
 #personNoteForm .plan-add-form, #personPrayerForm .plan-add-form { margin-top: 8px; }
 .today-prayer-text { font-size: 13px; margin-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.today-prayer-toggle { margin-top: 0; }
