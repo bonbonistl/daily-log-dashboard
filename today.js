@@ -287,13 +287,15 @@ function renderTodayPrayers(now) {
 
   document.getElementById("todayPrayerCount").textContent = entries.length ? `${entries.length} open` : "";
 
+  // A past date isn't overdue — the request just hasn't been answered yet — so it gets
+  // a plain date, no "ago"/warning framing.
   const whenLabel = (diff, dateStr) => {
     if (diff === 0) return "Today";
     if (diff === 1) return "Tomorrow";
-    if (diff === -1) return "Yesterday";
-    const date = new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    if (diff < 0) return `Since ${date}`;
-    return new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const d = new Date(dateStr + "T00:00:00");
+    return diff > 0
+      ? d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
+      : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
 
   const rowHtml = (e) => `

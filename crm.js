@@ -370,12 +370,11 @@ function renderPersonNotes() {
 
 function renderPersonPrayers() {
   const el = document.getElementById("personPrayerList");
-  const todayStr = todayLocalStr();
   // Open requests by date first, then answered ones (most recently answered first).
   const open = personPrayers.filter((r) => !r.answered_at);
   const answered = personPrayers.filter((r) => r.answered_at).sort((a, b) => b.answered_at.localeCompare(a.answered_at));
   const itemHtml = (r) => `
-    <li data-id="${r.id}" class="${r.answered_at ? "done" : ""} ${!r.answered_at && r.pray_on <= todayStr ? "due" : ""}">
+    <li data-id="${r.id}" class="${r.answered_at ? "done" : ""}">
       <div class="person-history-head">
         <label class="person-prayer-check">
           <input type="checkbox" ${r.answered_at ? "checked" : ""} title="Mark as answered" />
