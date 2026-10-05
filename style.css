@@ -1671,7 +1671,8 @@ button:hover { border-color: var(--accent); }
 .person-history-date { font-size: 12px; font-weight: 600; color: var(--muted); }
 .person-history-body { font-size: 13px; margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .person-history li.due .person-history-date { color: var(--accent); }
-.person-history li.done .person-history-body { color: var(--muted); text-decoration: line-through; }
+.person-history li.done .person-history-body { color: var(--muted); }
+.person-history li.done .person-history-date { color: var(--accent); }
 .person-prayer-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .person-prayer-check input { accent-color: var(--accent); width: 15px; height: 15px; }
 #personNoteForm, #personPrayerForm { gap: 0; }

@@ -21,7 +21,8 @@ const INACTIVE_JOB_STATUSES = ["declined", "auto_declined", "not_a_match"];
 // Pipeline order, furthest along first — an offer matters more than something you're watching.
 const JOB_STAGE_RANK = { offered: 0, interviewing: 1, heard_back: 2, applied: 3, watching: 4 };
 const JOB_STALE_DAYS = 10;
-// Prayer requests dated within this many days (or overdue) show up front; later ones collapse.
+// Prayer requests stay on the dashboard until marked answered. Ones dated within this
+// many days (or already past) show up front; further-out ones collapse under "Later".
 const PRAYER_LOOKAHEAD_DAYS = 7;
 
 let todayData = null; // { practices, habitLog, people, openings, businesses, logRows, planRows }
@@ -52,7 +53,7 @@ async function loadTodayData() {
     sb.from("daily_log").select("*").gte("log_date", toLocalDateStr(yesterday))
       .order("log_date", { ascending: true }).order("id", { ascending: true }),
     sb.from("food_plan").select("*").eq("log_date", todayStr),
-    sb.from("prayer_requests").select("*, people(name)").is("prayed_at", null).order("pray_on", { ascending: true }),
+    sb.from("prayer_requests").select("*, people(name)").is("answered_at", null).order("pray_on", { ascending: true }),
   ]);
 
   let results;
@@ -284,19 +285,19 @@ function renderTodayPrayers(now) {
   const timely = entries.filter((e) => e.diff <= PRAYER_LOOKAHEAD_DAYS);
   const later = entries.filter((e) => e.diff > PRAYER_LOOKAHEAD_DAYS);
 
-  const dueNow = entries.filter((e) => e.diff <= 0).length;
-  document.getElementById("todayPrayerCount").textContent = dueNow ? `${dueNow} today` : "";
+  document.getElementById("todayPrayerCount").textContent = entries.length ? `${entries.length} open` : "";
 
   const whenLabel = (diff, dateStr) => {
     if (diff === 0) return "Today";
     if (diff === 1) return "Tomorrow";
     if (diff === -1) return "Yesterday";
-    if (diff < 0) return `${-diff} days ago`;
+    const date = new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    if (diff < 0) return `Since ${date}`;
     return new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   };
 
   const rowHtml = (e) => `
-    <div class="today-row ${e.diff === 0 ? "today-row-highlight" : ""} ${e.diff < 0 ? "today-row-belated" : ""}">
+    <div class="today-row ${e.diff === 0 ? "today-row-highlight" : ""}">
       <div class="today-row-main">
         <button type="button" class="today-row-title today-person-btn" data-person-id="${e.r.person_id}">${escHtml(e.r.people?.name || "Someone")}</button>
         <div class="today-prayer-text">${escHtml(e.r.request)}</div>
@@ -304,14 +305,14 @@ function renderTodayPrayers(now) {
       </div>
       <label class="today-celebrate">
         <input type="checkbox" data-prayer-id="${e.r.id}" />
-        Prayed
+        Answered
       </label>
     </div>
   `;
 
   const el = document.getElementById("todayPrayers");
   if (!entries.length) {
-    el.innerHTML = `<div class="journal-empty">No open prayer requests. Add one from a person in Connections → CRM.</div>`;
+    el.innerHTML = `<div class="journal-empty">No unanswered prayer requests. Add one from a person in Connections → CRM.</div>`;
     return;
   }
   let html = timely.length
@@ -330,8 +331,8 @@ function renderTodayPrayers(now) {
   el.querySelectorAll("input[data-prayer-id]").forEach((cb) => {
     cb.addEventListener("change", async () => {
       cb.disabled = true;
-      // setPrayerPrayed (crm.js) reloads Today on success.
-      if (await setPrayerPrayed(cb.dataset.prayerId, cb.checked)) { cb.checked = !cb.checked; cb.disabled = false; }
+      // setPrayerAnswered (crm.js) reloads Today on success.
+      if (await setPrayerAnswered(cb.dataset.prayerId, cb.checked)) { cb.checked = !cb.checked; cb.disabled = false; }
     });
   });
   el.querySelectorAll(".today-person-btn").forEach((btn) => {

@@ -3,7 +3,7 @@ let people = []; // [{id, name, title, linkedin_url, instagram_url, email, phone
 let crmBusinesses = []; // [{id, name}] — lightweight, just for the business select + display
 let openPersonId = null; // id of the person currently shown in the side rail, or null if closed
 let personNotes = []; // [{id, person_id, note_date, body, created_at}] — for the currently open rail only
-let personPrayers = []; // [{id, person_id, request, pray_on, prayed_at, created_at}] — for the currently open rail only
+let personPrayers = []; // [{id, person_id, request, pray_on, answered_at, created_at}] — for the currently open rail only; answered_at null = still being prayed for
 
 async function loadCrmData() {
   if (!crmLoadedOnce) {
@@ -371,25 +371,25 @@ function renderPersonNotes() {
 function renderPersonPrayers() {
   const el = document.getElementById("personPrayerList");
   const todayStr = todayLocalStr();
-  // Open requests by date first, then ones you've already prayed (most recent first).
-  const open = personPrayers.filter((r) => !r.prayed_at);
-  const prayed = personPrayers.filter((r) => r.prayed_at).sort((a, b) => b.pray_on.localeCompare(a.pray_on));
+  // Open requests by date first, then answered ones (most recently answered first).
+  const open = personPrayers.filter((r) => !r.answered_at);
+  const answered = personPrayers.filter((r) => r.answered_at).sort((a, b) => b.answered_at.localeCompare(a.answered_at));
   const itemHtml = (r) => `
-    <li data-id="${r.id}" class="${r.prayed_at ? "done" : ""} ${!r.prayed_at && r.pray_on <= todayStr ? "due" : ""}">
+    <li data-id="${r.id}" class="${r.answered_at ? "done" : ""} ${!r.answered_at && r.pray_on <= todayStr ? "due" : ""}">
       <div class="person-history-head">
         <label class="person-prayer-check">
-          <input type="checkbox" ${r.prayed_at ? "checked" : ""} title="Prayed" />
-          <span class="person-history-date">${fmtCrmDate(r.pray_on)}</span>
+          <input type="checkbox" ${r.answered_at ? "checked" : ""} title="Mark as answered" />
+          <span class="person-history-date">${fmtCrmDate(r.pray_on)}${r.answered_at ? ` · answered ${fmtCrmDate(toLocalDateStr(new Date(r.answered_at)))}` : ""}</span>
         </label>
         <button type="button" class="plan-item-remove person-prayer-remove" title="Delete request">&times;</button>
       </div>
       <div class="person-history-body">${escCrm(r.request)}</div>
     </li>`;
   el.innerHTML = personPrayers.length
-    ? `<ul class="person-history">${[...open, ...prayed].map(itemHtml).join("")}</ul>`
+    ? `<ul class="person-history">${[...open, ...answered].map(itemHtml).join("")}</ul>`
     : `<div class="journal-empty">No prayer requests yet.</div>`;
   el.querySelectorAll(".person-prayer-check input").forEach((cb) => {
-    cb.addEventListener("change", () => setPrayerPrayed(cb.closest("[data-id]").dataset.id, cb.checked));
+    cb.addEventListener("change", () => setPrayerAnswered(cb.closest("[data-id]").dataset.id, cb.checked));
   });
   el.querySelectorAll(".person-prayer-remove").forEach((btn) => {
     btn.addEventListener("click", () => removePrayerRequest(btn.closest("[data-id]").dataset.id));
@@ -439,9 +439,9 @@ async function removePrayerRequest(requestId) {
 }
 
 // Shared with the Today dashboard's prayer list.
-async function setPrayerPrayed(requestId, prayed) {
+async function setPrayerAnswered(requestId, answered) {
   const { error } = await sb.from("prayer_requests")
-    .update({ prayed_at: prayed ? new Date().toISOString() : null }).eq("id", requestId);
+    .update({ answered_at: answered ? new Date().toISOString() : null }).eq("id", requestId);
   if (error) { alert("Failed to update: " + error.message); return error; }
   if (openPersonId != null) await loadPersonHistory(openPersonId);
   refreshTodayIfLoaded();
