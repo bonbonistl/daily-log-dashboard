@@ -166,6 +166,14 @@
 
         <div class="panel">
           <div class="panel-heading-row">
+            <h2>Prayer Requests</h2>
+            <span id="todayPrayerCount" class="today-count"></span>
+          </div>
+          <div id="todayPrayers"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading-row">
             <h2>Food &amp; Exercise</h2>
             <button id="todayHealthOpenBtn">Open plan</button>
           </div>
@@ -616,6 +624,31 @@
       </label>
       <button type="submit">Save</button>
     </form>
+
+    <div class="detail-form-section">
+      <h3>Prayer Requests</h3>
+      <form id="personPrayerForm" class="detail-form">
+        <textarea id="personPrayerText" rows="2" placeholder="What to pray for" required></textarea>
+        <div class="plan-add-form">
+          <input type="date" id="personPrayerDate" required title="When to pray for this" />
+          <button type="submit">Add request</button>
+        </div>
+      </form>
+      <div id="personPrayerList"></div>
+    </div>
+
+    <div class="detail-form-section">
+      <h3>Notes</h3>
+      <form id="personNoteForm" class="detail-form">
+        <textarea id="personNoteText" rows="3" placeholder="What happened, what you talked about…" required></textarea>
+        <div class="plan-add-form">
+          <input type="date" id="personNoteDate" required />
+          <button type="submit">Add note</button>
+        </div>
+      </form>
+      <div id="personNotesList"></div>
+    </div>
+
     <div class="detail-form-section">
       <button type="button" id="personRemoveBtn" class="detail-form-danger-btn">Remove this person</button>
     </div>

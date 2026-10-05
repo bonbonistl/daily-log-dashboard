@@ -1,6 +1,7 @@
 // "Today" dashboard — a time-aware landing page that pulls the few things that
 // matter right now from every other tab: habits due in the current time slot
-// (plus anything still open from earlier), today's/upcoming birthdays, active
+// (plus anything still open from earlier), today's/upcoming birthdays, timely
+// prayer requests, active
 // job openings, and today's food/exercise numbers. Fetches its own data rather
 // than depending on the other tabs' lazy loads, so it works as the first screen.
 
@@ -20,10 +21,13 @@ const INACTIVE_JOB_STATUSES = ["declined", "auto_declined", "not_a_match"];
 // Pipeline order, furthest along first — an offer matters more than something you're watching.
 const JOB_STAGE_RANK = { offered: 0, interviewing: 1, heard_back: 2, applied: 3, watching: 4 };
 const JOB_STALE_DAYS = 10;
+// Prayer requests dated within this many days (or overdue) show up front; later ones collapse.
+const PRAYER_LOOKAHEAD_DAYS = 7;
 
 let todayData = null; // { practices, habitLog, people, openings, businesses, logRows, planRows }
 let todayLoadedOnce = false;
 let todayShowUpcomingHabits = false;
+let todayShowLaterPrayers = false;
 
 const escHtml = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -48,6 +52,7 @@ async function loadTodayData() {
     sb.from("daily_log").select("*").gte("log_date", toLocalDateStr(yesterday))
       .order("log_date", { ascending: true }).order("id", { ascending: true }),
     sb.from("food_plan").select("*").eq("log_date", todayStr),
+    sb.from("prayer_requests").select("*, people(name)").is("prayed_at", null).order("pray_on", { ascending: true }),
   ]);
 
   let results;
@@ -65,7 +70,7 @@ async function loadTodayData() {
     return;
   }
 
-  const [practicesRes, habitLogRes, peopleRes, openingsRes, businessesRes, logRes, planRes] = results;
+  const [practicesRes, habitLogRes, peopleRes, openingsRes, businessesRes, logRes, planRes, prayersRes] = results;
   todayData = {
     practices: practicesRes.data,
     habitLog: habitLogRes.data,
@@ -74,6 +79,7 @@ async function loadTodayData() {
     businesses: businessesRes.data,
     logRows: logRes.data,
     planRows: planRes.data,
+    prayers: prayersRes.data,
   };
   todayLoadedOnce = true;
   statusEl.classList.add("hidden");
@@ -88,6 +94,7 @@ function renderTodayDashboard() {
   renderTodayGreeting(now);
   renderTodayHabits(now, todayStr);
   renderTodayBirthdays(now);
+  renderTodayPrayers(now);
   renderTodayJobs(now);
   renderTodayHealth(todayStr);
 }
@@ -265,6 +272,76 @@ async function updateTodayCelebrated(cb) {
   if (person) person.birthday_celebrated_year = year;
   cb.disabled = false;
   if (typeof connectionsLoaded !== "undefined" && connectionsLoaded) loadCrmData();
+}
+
+// ---------- prayer requests ----------
+function renderTodayPrayers(now) {
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const entries = todayData.prayers.map((r) => ({
+    r,
+    diff: Math.round((new Date(r.pray_on + "T00:00:00") - midnight) / 86400000),
+  }));
+  const timely = entries.filter((e) => e.diff <= PRAYER_LOOKAHEAD_DAYS);
+  const later = entries.filter((e) => e.diff > PRAYER_LOOKAHEAD_DAYS);
+
+  const dueNow = entries.filter((e) => e.diff <= 0).length;
+  document.getElementById("todayPrayerCount").textContent = dueNow ? `${dueNow} today` : "";
+
+  const whenLabel = (diff, dateStr) => {
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Tomorrow";
+    if (diff === -1) return "Yesterday";
+    if (diff < 0) return `${-diff} days ago`;
+    return new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  };
+
+  const rowHtml = (e) => `
+    <div class="today-row ${e.diff === 0 ? "today-row-highlight" : ""} ${e.diff < 0 ? "today-row-belated" : ""}">
+      <div class="today-row-main">
+        <button type="button" class="today-row-title today-person-btn" data-person-id="${e.r.person_id}">${escHtml(e.r.people?.name || "Someone")}</button>
+        <div class="today-prayer-text">${escHtml(e.r.request)}</div>
+        <div class="today-row-sub">${whenLabel(e.diff, e.r.pray_on)}</div>
+      </div>
+      <label class="today-celebrate">
+        <input type="checkbox" data-prayer-id="${e.r.id}" />
+        Prayed
+      </label>
+    </div>
+  `;
+
+  const el = document.getElementById("todayPrayers");
+  if (!entries.length) {
+    el.innerHTML = `<div class="journal-empty">No open prayer requests. Add one from a person in Connections → CRM.</div>`;
+    return;
+  }
+  let html = timely.length
+    ? timely.map(rowHtml).join("")
+    : `<div class="journal-empty">Nothing in the next ${PRAYER_LOOKAHEAD_DAYS} days.</div>`;
+  if (later.length) {
+    html += `
+      <button type="button" class="today-toggle" id="todayLaterPrayersToggle">
+        ${todayShowLaterPrayers ? "▾" : "▸"} Later <span class="hint">${later.length}</span>
+      </button>
+      ${todayShowLaterPrayers ? later.map(rowHtml).join("") : ""}
+    `;
+  }
+  el.innerHTML = html;
+
+  el.querySelectorAll("input[data-prayer-id]").forEach((cb) => {
+    cb.addEventListener("change", async () => {
+      cb.disabled = true;
+      // setPrayerPrayed (crm.js) reloads Today on success.
+      if (await setPrayerPrayed(cb.dataset.prayerId, cb.checked)) { cb.checked = !cb.checked; cb.disabled = false; }
+    });
+  });
+  el.querySelectorAll(".today-person-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openTodayPerson(btn.dataset.personId));
+  });
+  const toggle = document.getElementById("todayLaterPrayersToggle");
+  if (toggle) toggle.addEventListener("click", () => {
+    todayShowLaterPrayers = !todayShowLaterPrayers;
+    renderTodayPrayers(new Date());
+  });
 }
 
 // ---------- jobs ----------

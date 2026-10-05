@@ -2,6 +2,8 @@ let crmLoadedOnce = false;
 let people = []; // [{id, name, title, linkedin_url, instagram_url, email, phone, city, state, country, birthday, birthday_celebrated_year, business_id, created_at}] — birthday is free text (e.g. "8/24"), not a date column, since the year is often unknown
 let crmBusinesses = []; // [{id, name}] — lightweight, just for the business select + display
 let openPersonId = null; // id of the person currently shown in the side rail, or null if closed
+let personNotes = []; // [{id, person_id, note_date, body, created_at}] — for the currently open rail only
+let personPrayers = []; // [{id, person_id, request, pray_on, prayed_at, created_at}] — for the currently open rail only
 
 async function loadCrmData() {
   if (!crmLoadedOnce) {
@@ -260,12 +262,25 @@ function openPersonDrawer(personId) {
   document.getElementById("personCountry").value = person.country || "";
   document.getElementById("personBirthday").value = person.birthday || "";
 
+  personNotes = [];
+  personPrayers = [];
+  document.getElementById("personNotesList").innerHTML = `<div class="journal-empty">Loading…</div>`;
+  document.getElementById("personPrayerList").innerHTML = "";
+  document.getElementById("personNoteText").value = "";
+  document.getElementById("personNoteDate").value = todayLocalStr();
+  document.getElementById("personPrayerText").value = "";
+  document.getElementById("personPrayerDate").value = "";
+  document.getElementById("personPrayerDate").min = todayLocalStr();
+  loadPersonHistory(person.id);
+
   document.getElementById("personDrawer").classList.add("open");
   document.getElementById("personBackdrop").classList.add("open");
 }
 
 function closePersonDrawer() {
   openPersonId = null;
+  personNotes = [];
+  personPrayers = [];
   document.getElementById("personDrawer").classList.remove("open");
   document.getElementById("personBackdrop").classList.remove("open");
 }
@@ -301,3 +316,134 @@ document.getElementById("personDetailsForm").addEventListener("submit", async (e
   // The rail can be opened from the Today dashboard's birthdays — keep that in sync.
   if (typeof todayLoadedOnce !== "undefined" && todayLoadedOnce) loadTodayData();
 });
+
+// ---------- person notes + prayer requests (per-person history in the rail) ----------
+
+const escCrm = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// "Oct 5" this year, "Oct 5, 2025" otherwise — notes are a long-running log.
+function fmtCrmDate(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const opts = { month: "short", day: "numeric" };
+  if (d.getFullYear() !== currentYear()) opts.year = "numeric";
+  return d.toLocaleDateString(undefined, opts);
+}
+
+function refreshTodayIfLoaded() {
+  if (typeof todayLoadedOnce !== "undefined" && todayLoadedOnce) loadTodayData();
+}
+
+async function loadPersonHistory(personId) {
+  const [notesRes, prayersRes] = await Promise.all([
+    sb.from("person_notes").select("*").eq("person_id", personId)
+      .order("note_date", { ascending: false }).order("created_at", { ascending: false }),
+    sb.from("prayer_requests").select("*").eq("person_id", personId).order("pray_on", { ascending: true }),
+  ]);
+  if (String(openPersonId) !== String(personId)) return; // rail moved on while loading
+  const error = notesRes.error || prayersRes.error;
+  if (error) {
+    document.getElementById("personNotesList").innerHTML = `<div class="journal-empty">Error loading: ${escCrm(error.message)}</div>`;
+    return;
+  }
+  personNotes = notesRes.data;
+  personPrayers = prayersRes.data;
+  renderPersonNotes();
+  renderPersonPrayers();
+}
+
+function renderPersonNotes() {
+  const el = document.getElementById("personNotesList");
+  el.innerHTML = personNotes.length
+    ? `<ul class="person-history">${personNotes.map((n) => `
+        <li data-id="${n.id}">
+          <div class="person-history-head">
+            <span class="person-history-date">${fmtCrmDate(n.note_date)}</span>
+            <button type="button" class="plan-item-remove person-note-remove" title="Delete note">&times;</button>
+          </div>
+          <div class="person-history-body">${escCrm(n.body)}</div>
+        </li>`).join("")}</ul>`
+    : `<div class="journal-empty">No notes yet.</div>`;
+  el.querySelectorAll(".person-note-remove").forEach((btn) => {
+    btn.addEventListener("click", () => removePersonNote(btn.closest("[data-id]").dataset.id));
+  });
+}
+
+function renderPersonPrayers() {
+  const el = document.getElementById("personPrayerList");
+  const todayStr = todayLocalStr();
+  // Open requests by date first, then ones you've already prayed (most recent first).
+  const open = personPrayers.filter((r) => !r.prayed_at);
+  const prayed = personPrayers.filter((r) => r.prayed_at).sort((a, b) => b.pray_on.localeCompare(a.pray_on));
+  const itemHtml = (r) => `
+    <li data-id="${r.id}" class="${r.prayed_at ? "done" : ""} ${!r.prayed_at && r.pray_on <= todayStr ? "due" : ""}">
+      <div class="person-history-head">
+        <label class="person-prayer-check">
+          <input type="checkbox" ${r.prayed_at ? "checked" : ""} title="Prayed" />
+          <span class="person-history-date">${fmtCrmDate(r.pray_on)}</span>
+        </label>
+        <button type="button" class="plan-item-remove person-prayer-remove" title="Delete request">&times;</button>
+      </div>
+      <div class="person-history-body">${escCrm(r.request)}</div>
+    </li>`;
+  el.innerHTML = personPrayers.length
+    ? `<ul class="person-history">${[...open, ...prayed].map(itemHtml).join("")}</ul>`
+    : `<div class="journal-empty">No prayer requests yet.</div>`;
+  el.querySelectorAll(".person-prayer-check input").forEach((cb) => {
+    cb.addEventListener("change", () => setPrayerPrayed(cb.closest("[data-id]").dataset.id, cb.checked));
+  });
+  el.querySelectorAll(".person-prayer-remove").forEach((btn) => {
+    btn.addEventListener("click", () => removePrayerRequest(btn.closest("[data-id]").dataset.id));
+  });
+}
+
+document.getElementById("personNoteForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (openPersonId == null) return;
+  const body = document.getElementById("personNoteText").value.trim();
+  const note_date = document.getElementById("personNoteDate").value;
+  if (!body || !note_date) return;
+  const { error } = await sb.from("person_notes").insert({ person_id: openPersonId, body, note_date });
+  if (error) { alert("Failed to add note: " + error.message); return; }
+  document.getElementById("personNoteText").value = "";
+  document.getElementById("personNoteDate").value = todayLocalStr();
+  await loadPersonHistory(openPersonId);
+});
+
+document.getElementById("personPrayerForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (openPersonId == null) return;
+  const request = document.getElementById("personPrayerText").value.trim();
+  const pray_on = document.getElementById("personPrayerDate").value;
+  if (!request || !pray_on) return;
+  const { error } = await sb.from("prayer_requests").insert({ person_id: openPersonId, request, pray_on });
+  if (error) { alert("Failed to add prayer request: " + error.message); return; }
+  document.getElementById("personPrayerText").value = "";
+  document.getElementById("personPrayerDate").value = "";
+  await loadPersonHistory(openPersonId);
+  refreshTodayIfLoaded();
+});
+
+async function removePersonNote(noteId) {
+  if (!confirm("Delete this note?")) return;
+  const { error } = await sb.from("person_notes").delete().eq("id", noteId);
+  if (error) { alert("Failed to delete note: " + error.message); return; }
+  await loadPersonHistory(openPersonId);
+}
+
+async function removePrayerRequest(requestId) {
+  if (!confirm("Delete this prayer request?")) return;
+  const { error } = await sb.from("prayer_requests").delete().eq("id", requestId);
+  if (error) { alert("Failed to delete prayer request: " + error.message); return; }
+  await loadPersonHistory(openPersonId);
+  refreshTodayIfLoaded();
+}
+
+// Shared with the Today dashboard's prayer list.
+async function setPrayerPrayed(requestId, prayed) {
+  const { error } = await sb.from("prayer_requests")
+    .update({ prayed_at: prayed ? new Date().toISOString() : null }).eq("id", requestId);
+  if (error) { alert("Failed to update: " + error.message); return error; }
+  if (openPersonId != null) await loadPersonHistory(openPersonId);
+  refreshTodayIfLoaded();
+  return null;
+}

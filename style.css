@@ -1656,3 +1656,24 @@ button:hover { border-color: var(--accent); }
 .job-archive summary { cursor: pointer; font-weight: 600; font-size: 16px; padding: 6px 0; }
 .job-archive-item .job-table-sub { margin-top: 0; }
 .job-archive-restore { font-size: 12px; }
+
+/* ---------- person notes + prayer requests (CRM rail) ---------- */
+.person-history {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.person-history li { padding: 8px 0; border-bottom: 1px solid var(--panel-border); }
+.person-history li:last-child { border-bottom: none; }
+.person-history-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.person-history-date { font-size: 12px; font-weight: 600; color: var(--muted); }
+.person-history-body { font-size: 13px; margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.person-history li.due .person-history-date { color: var(--accent); }
+.person-history li.done .person-history-body { color: var(--muted); text-decoration: line-through; }
+.person-prayer-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.person-prayer-check input { accent-color: var(--accent); width: 15px; height: 15px; }
+#personNoteForm, #personPrayerForm { gap: 0; }
+#personNoteForm .plan-add-form, #personPrayerForm .plan-add-form { margin-top: 8px; }
+.today-prayer-text { font-size: 13px; margin-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
