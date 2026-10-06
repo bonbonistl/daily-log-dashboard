@@ -867,6 +867,7 @@ button:hover { border-color: var(--accent); }
   align-items: center;
   gap: 10px;
 }
+#settingsBtn,
 #signOutBtn {
   background: var(--panel);
   border: 1px solid var(--panel-border);
@@ -877,6 +878,35 @@ button:hover { border-color: var(--accent); }
   cursor: pointer;
 }
 #signOutBtn:hover { color: var(--text); border-color: var(--danger); }
+#settingsBtn:hover { color: var(--text); border-color: var(--accent); }
+#settingsDrawerCloseBtn { background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer; }
+.location-results { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.location-result {
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.location-result:hover { border-color: var(--accent); }
+.location-result .muted { color: var(--muted); font-size: 12px; }
+.settings-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.settings-actions button {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.settings-actions button:hover { border-color: var(--accent); }
 
 /* ---------- check-in date nav ---------- */
 .checkin-date-nav {
@@ -1570,6 +1600,17 @@ button:hover { border-color: var(--accent); }
 .weather-day-name { color: var(--muted); }
 .weather-day-icon { font-size: 18px; line-height: 1.2; }
 .weather-day-temps .muted { color: var(--muted); }
+.weather-place {
+  flex-basis: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+}
+.weather-place:hover { color: var(--accent); }
 @media (max-width: 720px) {
   .today-hero-right { align-items: stretch; width: 100%; }
   .weather-days { border-left: none; padding-left: 0; }

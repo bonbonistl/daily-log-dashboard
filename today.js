@@ -99,11 +99,15 @@ function renderTodayDashboard() {
 }
 
 // ---------- weather (Open-Meteo, no API key) ----------
-const WEATHER_LAT = 38.627;  // St. Louis, MO
-const WEATHER_LON = -90.199;
 const WEATHER_TTL_MS = 30 * 60 * 1000;
-let todayWeather = null; // { fetchedAt, data }
+let todayWeather = null; // { fetchedAt, loc, data }
 let todayWeatherInflight = null;
+
+// Called by settings.js after the location changes
+function refreshTodayWeather() {
+  todayWeather = null;
+  loadTodayWeather();
+}
 
 // WMO weather codes → [emoji, label]
 function weatherCodeInfo(code, isDay = true) {
@@ -124,16 +128,21 @@ function weatherCodeInfo(code, isDay = true) {
 async function loadTodayWeather() {
   const fresh = todayWeather && Date.now() - todayWeather.fetchedAt < WEATHER_TTL_MS;
   if (fresh || todayWeatherInflight) { renderTodayWeather(); return; }
+  todayWeatherInflight = loadUserSettings().then(() => {
+    const loc = weatherLocation();
+    return fetchWeather(loc).then((data) => { todayWeather = { fetchedAt: Date.now(), loc, data }; });
+  })
+    .catch((err) => console.warn("Weather fetch failed", err))
+    .finally(() => { todayWeatherInflight = null; renderTodayWeather(); });
+}
+
+function fetchWeather(loc) {
   const url = "https://api.open-meteo.com/v1/forecast" +
-    `?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}` +
+    `?latitude=${loc.lat}&longitude=${loc.lon}` +
     "&current=temperature_2m,apparent_temperature,weather_code,is_day" +
     "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
     "&temperature_unit=fahrenheit&timezone=auto&forecast_days=5";
-  todayWeatherInflight = fetch(url)
-    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
-    .then((data) => { todayWeather = { fetchedAt: Date.now(), data }; })
-    .catch((err) => console.warn("Weather fetch failed", err))
-    .finally(() => { todayWeatherInflight = null; renderTodayWeather(); });
+  return fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
 }
 
 function renderTodayWeather() {
@@ -160,7 +169,8 @@ function renderTodayWeather() {
         <div class="weather-sub">H ${Math.round(d.temperature_2m_max[0])}° · L ${Math.round(d.temperature_2m_min[0])}° · Feels ${Math.round(c.apparent_temperature)}°${rain != null ? ` · 💧 ${rain}%` : ""}</div>
       </div>
     </div>
-    <div class="weather-days">${days}</div>`;
+    <div class="weather-days">${days}</div>
+    <button type="button" class="weather-place" onclick="openSettingsDrawer()" title="Change location in Settings">📍 ${escHtml(todayWeather.loc.name)}</button>`;
 }
 
 // ---------- greeting ----------

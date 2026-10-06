@@ -52,6 +52,7 @@
     </div>
     <div class="user-info">
       <span id="userEmailLabel" class="updated-at"></span>
+      <button id="settingsBtn" title="Personal settings">⚙︎ Settings</button>
       <button id="signOutBtn">Sign out</button>
     </div>
   </header>
@@ -588,6 +589,30 @@
     </div>
   </aside>
 
+  <div id="settingsBackdrop" class="journal-backdrop"></div>
+  <aside id="settingsDrawer" class="journal-drawer">
+    <div class="journal-header">
+      <h2>Settings</h2>
+      <button id="settingsDrawerCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <div class="detail-form-section">
+      <h3>Location</h3>
+      <p class="drawer-hint">Used for the weather on Today. Currently: <strong id="currentLocation"></strong></p>
+      <form id="locationSearchForm" class="detail-form">
+        <div class="plan-add-form">
+          <input type="text" id="locationSearch" placeholder="Search a city, e.g. Austin, TX" maxlength="100" />
+          <button type="submit">Search</button>
+        </div>
+      </form>
+      <div id="locationResults" class="location-results"></div>
+      <div class="settings-actions">
+        <button type="button" id="useCurrentLocationBtn">📍 Use my current location</button>
+        <button type="button" id="resetLocationBtn">Reset to default</button>
+      </div>
+      <div id="locationStatus" class="drawer-hint"></div>
+    </div>
+  </aside>
+
   <div id="personBackdrop" class="journal-backdrop"></div>
   <aside id="personDrawer" class="journal-drawer">
     <div class="journal-header">
@@ -725,6 +750,7 @@
   <script src="crm.js"></script>
   <script src="paper.js"></script>
   <script src="frametv.js"></script>
+  <script src="settings.js"></script>
   <script src="today.js"></script>
   <script src="tabs.js"></script>
   <script src="auth.js"></script>
