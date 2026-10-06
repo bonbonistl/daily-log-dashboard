@@ -95,6 +95,72 @@ function renderTodayDashboard() {
   renderTodayPrayers(now);
   renderTodayJobs(now);
   renderTodayHealth(todayStr);
+  loadTodayWeather();
+}
+
+// ---------- weather (Open-Meteo, no API key) ----------
+const WEATHER_LAT = 38.627;  // St. Louis, MO
+const WEATHER_LON = -90.199;
+const WEATHER_TTL_MS = 30 * 60 * 1000;
+let todayWeather = null; // { fetchedAt, data }
+let todayWeatherInflight = null;
+
+// WMO weather codes → [emoji, label]
+function weatherCodeInfo(code, isDay = true) {
+  if (code === 0) return [isDay ? "☀️" : "🌙", "Clear"];
+  if (code === 1) return [isDay ? "🌤️" : "🌙", "Mostly clear"];
+  if (code === 2) return ["⛅", "Partly cloudy"];
+  if (code === 3) return ["☁️", "Cloudy"];
+  if (code === 45 || code === 48) return ["🌫️", "Fog"];
+  if (code >= 51 && code <= 57) return ["🌦️", "Drizzle"];
+  if (code >= 61 && code <= 67) return ["🌧️", "Rain"];
+  if (code >= 71 && code <= 77) return ["🌨️", "Snow"];
+  if (code >= 80 && code <= 82) return ["🌦️", "Showers"];
+  if (code === 85 || code === 86) return ["🌨️", "Snow showers"];
+  if (code >= 95) return ["⛈️", "Thunderstorms"];
+  return ["🌡️", "—"];
+}
+
+async function loadTodayWeather() {
+  const fresh = todayWeather && Date.now() - todayWeather.fetchedAt < WEATHER_TTL_MS;
+  if (fresh || todayWeatherInflight) { renderTodayWeather(); return; }
+  const url = "https://api.open-meteo.com/v1/forecast" +
+    `?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}` +
+    "&current=temperature_2m,apparent_temperature,weather_code,is_day" +
+    "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
+    "&temperature_unit=fahrenheit&timezone=auto&forecast_days=5";
+  todayWeatherInflight = fetch(url)
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+    .then((data) => { todayWeather = { fetchedAt: Date.now(), data }; })
+    .catch((err) => console.warn("Weather fetch failed", err))
+    .finally(() => { todayWeatherInflight = null; renderTodayWeather(); });
+}
+
+function renderTodayWeather() {
+  const el = document.getElementById("todayWeather");
+  if (!el) return;
+  if (!todayWeather) { el.innerHTML = ""; return; }
+  const { current: c, daily: d } = todayWeather.data;
+  const [icon, label] = weatherCodeInfo(c.weather_code, c.is_day === 1);
+  const rain = d.precipitation_probability_max[0];
+  const days = d.time.slice(1, 5).map((t, i) => {
+    const [dIcon, dLabel] = weatherCodeInfo(d.weather_code[i + 1]);
+    const name = new Date(t + "T12:00:00").toLocaleDateString(undefined, { weekday: "short" });
+    return `<div class="weather-day" title="${escHtml(dLabel)}">
+      <span class="weather-day-name">${name}</span>
+      <span class="weather-day-icon">${dIcon}</span>
+      <span class="weather-day-temps">${Math.round(d.temperature_2m_max[i + 1])}° <span class="muted">${Math.round(d.temperature_2m_min[i + 1])}°</span></span>
+    </div>`;
+  }).join("");
+  el.innerHTML = `
+    <div class="weather-now">
+      <span class="weather-icon">${icon}</span>
+      <div>
+        <div class="weather-temp">${Math.round(c.temperature_2m)}°F <span class="weather-label">${escHtml(label)}</span></div>
+        <div class="weather-sub">H ${Math.round(d.temperature_2m_max[0])}° · L ${Math.round(d.temperature_2m_min[0])}° · Feels ${Math.round(c.apparent_temperature)}°${rain != null ? ` · 💧 ${rain}%` : ""}</div>
+      </div>
+    </div>
+    <div class="weather-days">${days}</div>`;
 }
 
 // ---------- greeting ----------
