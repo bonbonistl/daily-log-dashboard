@@ -354,7 +354,11 @@ function renderTodayPrayers(now) {
   const entries = todayData.prayers.map((r) => ({
     r,
     diff: Math.round((new Date(r.pray_on + "T00:00:00") - midnight) / 86400000),
-  }));
+  }))
+    // Only requests dated within the next week (past-dated unanswered ones still show),
+    // newest date first.
+    .filter((e) => e.diff <= 7)
+    .sort((a, b) => b.diff - a.diff);
 
   document.getElementById("todayPrayerCount").textContent = entries.length ? `${entries.length} open` : "";
 
@@ -385,7 +389,7 @@ function renderTodayPrayers(now) {
 
   const el = document.getElementById("todayPrayers");
   if (!entries.length) {
-    el.innerHTML = `<div class="journal-empty">No unanswered prayer requests. Add one from a person in Connections → CRM.</div>`;
+    el.innerHTML = `<div class="journal-empty">No prayer requests in the next week. Add one from a person in Connections → CRM.</div>`;
     return;
   }
   // Every unanswered request stays listed until it's marked answered, in date order —
