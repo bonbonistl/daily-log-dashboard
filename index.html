@@ -148,10 +148,11 @@
       </div>
     </div>
     <div id="todayLoading" class="today-loading">Loading data…</div>
+    <section id="todayHeadlines" class="today-headlines hidden"></section>
 
     <div class="today-grid">
       <section class="today-col">
-        <div class="panel">
+        <div class="panel" id="todayCalendarPanel">
           <div class="panel-heading-row">
             <h2>Calendar</h2>
             <span id="todayCalendarCount" class="today-count"></span>
@@ -159,7 +160,7 @@
           <div id="todayCalendar"></div>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="todayHabitsPanel">
           <div class="panel-heading-row">
             <h2 id="todayHabitsHeading">Habits</h2>
             <span id="todayHabitsProgress" class="today-count"></span>
@@ -167,7 +168,7 @@
           <div id="todayHabits"></div>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="todayHealthPanel">
           <div class="panel-heading-row">
             <h2>Food &amp; Exercise</h2>
             <button id="todayHealthOpenBtn">Open plan</button>
@@ -178,7 +179,7 @@
       </section>
 
       <section class="today-col">
-        <div class="panel">
+        <div class="panel" id="todayBirthdaysPanel">
           <div class="panel-heading-row">
             <h2>Birthdays <span class="hint">next 7 days</span></h2>
             <span id="todayBirthdaysCount" class="today-count"></span>
@@ -186,7 +187,7 @@
           <div id="todayBirthdays"></div>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="todayPrayersPanel">
           <div class="panel-heading-row">
             <h2>Prayer Requests</h2>
             <span id="todayPrayerCount" class="today-count"></span>
@@ -194,7 +195,7 @@
           <div id="todayPrayers"></div>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="todayJobsPanel">
           <div class="panel-heading-row">
             <h2>Jobs on your radar</h2>
             <span id="todayJobsCount" class="today-count"></span>

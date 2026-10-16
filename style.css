@@ -1628,6 +1628,50 @@ button:hover { border-color: var(--accent); }
   .weather-days { border-left: none; padding-left: 0; }
 }
 .today-greeting { margin: 0; font-size: 24px; }
+.today-headlines {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+.today-headlines-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.today-headlines-title .hint { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.today-headlines .today-allclear { margin-bottom: 0; }
+.today-headlines-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+.headline {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  border-left: 3px solid var(--muted);
+  background: color-mix(in srgb, var(--muted) 8%, transparent);
+  cursor: pointer;
+}
+.headline:disabled { cursor: default; opacity: 1; }
+.headline:not(:disabled):hover { filter: brightness(0.97); }
+.headline-icon { flex-shrink: 0; }
+.headline-urgent { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); font-weight: 600; }
+.headline-warn { border-left-color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.headline-info { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.headline-good { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .today-dateline { color: var(--muted); font-size: 14px; margin-top: 4px; }
 .today-loading { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
 

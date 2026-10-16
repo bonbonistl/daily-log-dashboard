@@ -95,6 +95,7 @@ function renderTodayDashboard() {
   renderTodayPrayers(now);
   renderTodayJobs(now);
   renderTodayHealth(todayStr);
+  renderTodayHeadlines();
   loadTodayWeather();
   loadTodayCalendar();
 }
@@ -172,6 +173,7 @@ function renderTodayWeather() {
     </div>
     <div class="weather-days">${days}</div>
     <button type="button" class="weather-place" onclick="openSettingsDrawer()" title="Change location in Settings">📍 ${escHtml(todayWeather.loc.name)}</button>`;
+  renderTodayHeadlines();
 }
 
 // ---------- greeting ----------
@@ -293,6 +295,7 @@ function renderTodayCalendar() {
   const errorNote = errors.length
     ? `<div class="drawer-hint today-calendar-error">Couldn't load: ${errors.map(escHtml).join(", ")}</div>` : "";
   el.innerHTML = (rows || `<div class="journal-empty">Nothing on the calendar today.</div>`) + errorNote;
+  renderTodayHeadlines();
 }
 
 function currentHabitSlot(now) {
@@ -307,6 +310,122 @@ function renderTodayGreeting(now) {
   document.getElementById("todayDateLine").textContent =
     now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }) +
     " · " + now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+// ---------- headlines ----------
+// A short "heads up" list at the top: the few things across every panel that are
+// time-sensitive or easy to let slip. Each rule is cheap and only uses data Today
+// already has, so it re-renders whenever the dashboard, calendar or weather updates.
+// Prayer requests are private, so their headline never names anyone.
+const HEADLINE_TONE_RANK = { urgent: 0, warn: 1, info: 2, good: 3 };
+const HEADLINE_MAX = 6;
+
+function todayHeadlines(now) {
+  const out = [];
+  const add = (tone, icon, text, target) => out.push({ tone, icon, text, target });
+  const fmtTime = (d) => d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const todayStr = todayLocalStr();
+
+  // Calendar: what's happening now / next, and anything all-day.
+  if (todayCalendar?.events) {
+    const timed = todayCalendar.events.filter((e) => !e.allDay);
+    const current = timed.find((e) => e.start <= now && e.end > now);
+    const next = timed.find((e) => e.start > now);
+    if (current) add("info", "📍", `Now: ${current.title} until ${fmtTime(current.end)}`, "todayCalendarPanel");
+    if (next) {
+      const mins = Math.round((next.start - now) / 60000);
+      const soon = mins <= 60;
+      add(soon ? "warn" : "info", "🗓️",
+        `${soon ? `In ${mins} min` : `Next at ${fmtTime(next.start)}`}: ${next.title}${next.location ? ` · ${next.location}` : ""}`,
+        "todayCalendarPanel");
+    }
+    const left = timed.filter((e) => e.start > now).length;
+    if (left >= 4) add("info", "📆", `Busy day: ${left} more events on the calendar`, "todayCalendarPanel");
+    todayCalendar.events.filter((e) => e.allDay).slice(0, 2)
+      .forEach((e) => add("info", "📌", `All day: ${e.title}`, "todayCalendarPanel"));
+  }
+
+  // Birthdays: today and missed ones (uncelebrated), plus tomorrow so there's time to plan.
+  todayData.people.forEach((p) => {
+    const info = nextBirthdayInfo(p, now);
+    if (!info || p.birthday_celebrated_year === info.year) return;
+    if (info.diff === 0) add("urgent", "🎂", `${p.name}'s birthday is today`, "todayBirthdaysPanel");
+    else if (info.diff < 0) add("warn", "🎂", `${p.name}'s birthday was ${-info.diff === 1 ? "yesterday" : `${-info.diff} days ago`} — not celebrated yet`, "todayBirthdaysPanel");
+    else if (info.diff === 1) add("info", "🎁", `${p.name}'s birthday is tomorrow`, "todayBirthdaysPanel");
+  });
+
+  // Jobs: offers and interviews first, then applications that have gone quiet.
+  const bizName = (id) => todayData.businesses.find((b) => b.id === id)?.name || "a company";
+  const active = todayData.openings.filter((o) => !INACTIVE_JOB_STATUSES.includes(o.status));
+  active.filter((o) => o.status === "offered")
+    .forEach((o) => add("urgent", "💼", `Offer from ${bizName(o.business_id)} is waiting on a decision`, "todayJobsPanel"));
+  active.filter((o) => o.status === "interviewing")
+    .forEach((o) => add("warn", "🎤", `Interviewing at ${bizName(o.business_id)} — prep or follow up`, "todayJobsPanel"));
+  const stale = active.filter((o) => ["applied", "heard_back"].includes(o.status) &&
+    (now - new Date(o.status_changed_at || o.created_at)) / 86400000 >= JOB_STALE_DAYS);
+  if (stale.length) add("warn", "⏳", `${stale.length} application${stale.length === 1 ? " has" : "s have"} gone quiet ${JOB_STALE_DAYS}+ days — follow up`, "todayJobsPanel");
+
+  // Habits: anything left over from earlier slots, or a win when everything's done.
+  const due = todayData.practices.flatMap((p) => TIMES_OF_DAY
+    .filter((t) => p[TIME_KEY[t]] && practiceAppliesOnDate(p, todayStr))
+    .map((t) => ({ t, row: todayData.habitLog.find((r) => r.time_of_day === t && r.practice === p.name) })))
+    .filter((it) => !(it.row && it.row.skipped));
+  const curIdx = TIMES_OF_DAY.indexOf(currentHabitSlot(now));
+  const earlierOpen = due.filter((it) => !it.row && TIMES_OF_DAY.indexOf(it.t) < curIdx).length;
+  if (earlierOpen) add("warn", "✅", `${earlierOpen} habit${earlierOpen === 1 ? "" : "s"} still open from earlier today`, "todayHabitsPanel");
+  else if (due.length && due.every((it) => it.row)) add("good", "🌟", "Every habit done today", "todayHabitsPanel");
+
+  // Prayer: count only — names and requests stay behind the panel's toggle.
+  const prayToday = todayData.prayers.filter((r) => r.pray_on === todayStr).length;
+  if (prayToday) add("info", "🙏", `${prayToday} prayer request${prayToday === 1 ? "" : "s"} for today`, "todayPrayersPanel");
+
+  // Health: only nudge late enough in the day that "not yet" means something.
+  const todayRows = todayData.logRows.filter((r) => r.log_date === todayStr);
+  if (now.getHours() >= 16 && !todayRows.some((r) => r.category === "Exercise")) {
+    add("info", "🏃", "No exercise logged yet today", "todayHealthPanel");
+  }
+  const planLeft = todayData.planRows.filter((p) => !p.logged_daily_log_id && p.time_of_day);
+  const slotPassed = (slot) => ({ Morning: 11, Midday: 15, Afternoon: 18, Evening: 21 }[slot] ?? 24) <= now.getHours();
+  const missedMeals = planLeft.filter((p) => slotPassed(p.time_of_day)).length;
+  if (missedMeals) add("info", "🍽️", `${missedMeals} planned food item${missedMeals === 1 ? "" : "s"} not checked off yet`, "todayHealthPanel");
+
+  // Weather: only when it changes plans.
+  const d = todayWeather?.data?.daily;
+  if (d) {
+    const rain = d.precipitation_probability_max?.[0];
+    if (rain != null && rain >= 60) add("info", "☔", `${rain}% chance of rain today`, null);
+    const hi = d.temperature_2m_max?.[0], lo = d.temperature_2m_min?.[0];
+    if (hi >= 95) add("warn", "🥵", `Hot one — high of ${Math.round(hi)}°`, null);
+    else if (lo <= 20) add("warn", "🥶", `Bundle up — low of ${Math.round(lo)}°`, null);
+  }
+
+  return out
+    .map((h, i) => ({ ...h, i }))
+    .sort((a, b) => HEADLINE_TONE_RANK[a.tone] - HEADLINE_TONE_RANK[b.tone] || a.i - b.i);
+}
+
+function renderTodayHeadlines() {
+  const el = document.getElementById("todayHeadlines");
+  if (!el || !todayData) return;
+  const all = todayHeadlines(new Date());
+  if (!all.length) {
+    el.classList.remove("hidden");
+    el.innerHTML = `<div class="today-headlines-title">Heads up</div><div class="today-allclear">Nothing pressing — you're all caught up.</div>`;
+    return;
+  }
+  const shown = all.slice(0, HEADLINE_MAX);
+  el.classList.remove("hidden");
+  el.innerHTML = `
+    <div class="today-headlines-title">Heads up${all.length > shown.length ? ` <span class="hint">top ${shown.length} of ${all.length}</span>` : ""}</div>
+    <div class="today-headlines-list">
+      ${shown.map((h) => `
+        <button type="button" class="headline headline-${h.tone}" ${h.target ? `data-target="${h.target}"` : "disabled"}>
+          <span class="headline-icon">${h.icon}</span><span>${escHtml(h.text)}</span>
+        </button>`).join("")}
+    </div>`;
+  el.querySelectorAll(".headline[data-target]").forEach((btn) => {
+    btn.addEventListener("click", () => document.getElementById(btn.dataset.target)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  });
 }
 
 // ---------- habits ----------
