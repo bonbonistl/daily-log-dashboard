@@ -327,8 +327,19 @@ function todayHeadlines(now) {
   const todayStr = todayLocalStr();
 
   // Calendar: what's happening now / next, and anything all-day.
-  if (todayCalendar?.events) {
-    const timed = todayCalendar.events.filter((e) => !e.allDay);
+  if (todayCalendar?.events && calendarSettings().length) {
+    // Dinner is planned as a "Dinner: …" event — surface what it is (or that it's missing)
+    // and keep it out of the generic now/next/all-day headlines below.
+    const isDinner = (e) => /^\s*dinner\s*:/i.test(e.title);
+    const dinner = todayCalendar.events.find(isDinner);
+    if (dinner) {
+      const what = dinner.title.replace(/^\s*dinner\s*:\s*/i, "") || "planned";
+      add("info", "🍽️", `Dinner: ${what}${dinner.allDay ? "" : ` at ${fmtTime(dinner.start)}`}`, "todayCalendarPanel");
+    } else if (now.getHours() < 20) {
+      add(now.getHours() >= 14 ? "warn" : "info", "🍽️", "No dinner on the calendar yet", "todayCalendarPanel");
+    }
+    const events = todayCalendar.events.filter((e) => !isDinner(e));
+    const timed = events.filter((e) => !e.allDay);
     const current = timed.find((e) => e.start <= now && e.end > now);
     const next = timed.find((e) => e.start > now);
     if (current) add("info", "📍", `Now: ${current.title} until ${fmtTime(current.end)}`, "todayCalendarPanel");
@@ -341,7 +352,7 @@ function todayHeadlines(now) {
     }
     const left = timed.filter((e) => e.start > now).length;
     if (left >= 4) add("info", "📆", `Busy day: ${left} more events on the calendar`, "todayCalendarPanel");
-    todayCalendar.events.filter((e) => e.allDay).slice(0, 2)
+    events.filter((e) => e.allDay).slice(0, 2)
       .forEach((e) => add("info", "📌", `All day: ${e.title}`, "todayCalendarPanel"));
   }
 
