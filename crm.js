@@ -35,6 +35,7 @@ async function loadCrmData() {
 
   people = peopleRes.data;
   crmBusinesses = businessesRes.data;
+  fillPeopleFilterSelects();
 
   document.getElementById("crmLoading").classList.add("hidden");
   document.getElementById("crmPanel").classList.remove("hidden");
@@ -56,21 +57,6 @@ function businessNameFor(businessId) {
 }
 
 // ---------- people table: sort + filter ----------
-const PEOPLE_SORT_HEADERS = [
-  { id: "peopleSortName", key: "name" },
-  { id: "peopleSortBusiness", key: "business" },
-  { id: "peopleSortLocation", key: "location" },
-  { id: "peopleSortBirthday", key: "birthday" },
-  { id: "peopleSortCelebrated", key: "celebrated" },
-  { id: "peopleSortLinks", key: "links" },
-];
-let peopleSortKey = "name";
-let peopleSortDir = 1;
-
-// Empty values sort after real ones regardless of direction toggling, by
-// pushing them past every real string ("￿" sorts after any normal text).
-const NULLS_LAST = "￿";
-
 function currentYear() {
   return Number(todayLocalStr().slice(0, 4));
 }
@@ -79,69 +65,153 @@ function celebratedThisYear(p) {
   return p.birthday_celebrated_year === currentYear();
 }
 
-// Birthday is free text like "8/24" — sort by calendar order (month, then day),
-// not as a string, or "10/5" would sort before "2/3". Unparseable/missing values sort last.
-function birthdaySortValue(p) {
+// Birthday is free text like "8/24" — parse out month/day, or null if it doesn't look like one.
+function birthdayParts(p) {
   const match = (p.birthday || "").match(/^(\d{1,2})\/(\d{1,2})/);
-  if (!match) return 9999;
-  const [, month, day] = match;
-  return Number(month) * 100 + Number(day);
+  if (!match) return null;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  return month >= 1 && month <= 12 ? { month, day } : null;
 }
+
+// Sort by calendar order (month, then day), not as a string, or "10/5" would sort before "2/3".
+function birthdaySortValue(p) {
+  const parts = birthdayParts(p);
+  return parts ? parts.month * 100 + parts.day : null;
+}
+
+// Days from today until their next birthday (0 = today).
+function daysUntilBirthday(p) {
+  const parts = birthdayParts(p);
+  if (!parts) return null;
+  const today = new Date(todayLocalStr() + "T00:00:00");
+  let next = new Date(today.getFullYear(), parts.month - 1, parts.day);
+  if (next < today) next = new Date(today.getFullYear() + 1, parts.month - 1, parts.day);
+  return Math.round((next - today) / (24 * 60 * 60 * 1000));
+}
+
+const personLocation = (p) => [p.city, p.state, p.country].filter(Boolean).join(", ");
+// The location filter groups by state when there is one (most people are US), else country.
+const personRegion = (p) => p.state || p.country || "";
+
+const lowerOrNull = (s) => (s ? s.toLowerCase() : null);
 
 const PEOPLE_SORT_VALUE = {
   name: (p) => p.name.toLowerCase(),
-  business: (p) => (businessNameFor(p.business_id) || NULLS_LAST).toLowerCase(),
-  location: (p) => ([p.city, p.state, p.country].filter(Boolean).join(", ") || NULLS_LAST).toLowerCase(),
+  business: (p) => lowerOrNull(businessNameFor(p.business_id)),
+  title: (p) => lowerOrNull(p.title),
+  location: (p) => lowerOrNull(personLocation(p)),
   birthday: birthdaySortValue,
+  upcoming: daysUntilBirthday,
   // Not-yet-celebrated first, then celebrated, then no-birthday-at-all last — surfaces who still needs a shoutout.
-  celebrated: (p) => (!p.birthday ? 2 : celebratedThisYear(p) ? 1 : 0),
+  celebrated: (p) => (!p.birthday ? null : celebratedThisYear(p) ? 1 : 0),
   links: (p) => (p.linkedin_url ? 1 : 0) + (p.instagram_url ? 1 : 0),
+  added: (p) => p.created_at || null,
+};
+
+const peopleTable = createTableControls({
+  storageKey: "people",
+  render: () => renderPeopleTable(),
+  headers: [
+    { id: "peopleSortName", key: "name" },
+    { id: "peopleSortBusiness", key: "business" },
+    { id: "peopleSortLocation", key: "location" },
+    { id: "peopleSortBirthday", key: "birthday" },
+    { id: "peopleSortCelebrated", key: "celebrated" },
+    { id: "peopleSortLinks", key: "links" },
+  ],
+  sortOptions: [
+    { key: "name", label: "Name" },
+    { key: "business", label: "Business" },
+    { key: "title", label: "Title" },
+    { key: "location", label: "Location" },
+    { key: "birthday", label: "Birthday (Jan → Dec)" },
+    { key: "upcoming", label: "Next birthday" },
+    { key: "celebrated", label: "Celebrated" },
+    { key: "links", label: "# Links" },
+    { key: "added", label: "Date added" },
+  ],
+  defaultSort: { key: "name", dir: 1 },
+  defaultDir: (key) => (key === "added" || key === "links" ? -1 : 1),
+  controlIds: ["peopleFilterInput", "peopleNotCelebratedFilter", "peopleBusinessFilter", "peopleLocationFilter", "peopleBirthdayFilter", "peopleInfoFilter"],
+  sortSelectId: "peopleSortSelect",
+  sortDirId: "peopleSortDirBtn",
+  clearBtnId: "peopleClearFiltersBtn",
+  countId: "peopleTableCount",
+});
+
+// Business + location choices come from the loaded data, so refresh them on every load.
+function fillPeopleFilterSelects() {
+  fillFilterSelect(document.getElementById("peopleBusinessFilter"), [
+    { value: "", label: "Any business" },
+    { value: "none", label: "No business" },
+    ...crmBusinesses.filter((b) => people.some((p) => p.business_id === b.id)).map((b) => ({ value: String(b.id), label: b.name })),
+  ]);
+  const regions = [...new Set(people.map(personRegion).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  fillFilterSelect(document.getElementById("peopleLocationFilter"), [
+    { value: "", label: "Any location" },
+    { value: "none", label: "No location" },
+    ...regions.map((r) => ({ value: r, label: r })),
+  ]);
+}
+
+function matchesBirthdayFilter(p, filter) {
+  if (!filter) return true;
+  if (filter === "none") return !birthdayParts(p);
+  const parts = birthdayParts(p);
+  if (!parts) return false;
+  if (filter === "30") return daysUntilBirthday(p) <= 30;
+  const thisMonth = Number(todayLocalStr().slice(5, 7));
+  if (filter === "this") return parts.month === thisMonth;
+  if (filter === "next") return parts.month === (thisMonth % 12) + 1;
+  return parts.month === Number(filter.slice(1)); // "m1".."m12"
+}
+
+const PEOPLE_INFO_FILTERS = {
+  has_email: (p) => !!p.email,
+  has_phone: (p) => !!p.phone,
+  has_linkedin: (p) => !!p.linkedin_url,
+  has_instagram: (p) => !!p.instagram_url,
+  no_email: (p) => !p.email,
+  no_phone: (p) => !p.phone,
+  no_linkedin: (p) => !p.linkedin_url,
+  no_location: (p) => !personLocation(p),
+  no_title: (p) => !p.title,
 };
 
 function getVisiblePeople() {
-  const filterText = document.getElementById("peopleFilterInput").value.trim().toLowerCase();
+  const val = (id) => document.getElementById(id).value;
+  const filterText = val("peopleFilterInput").trim().toLowerCase();
   const notCelebratedOnly = document.getElementById("peopleNotCelebratedFilter").checked;
+  const businessFilter = val("peopleBusinessFilter");
+  const locationFilter = val("peopleLocationFilter");
+  const birthdayFilter = val("peopleBirthdayFilter");
+  const infoFilter = PEOPLE_INFO_FILTERS[val("peopleInfoFilter")];
 
   const filtered = people.filter((p) => {
     if (notCelebratedOnly && (!p.birthday || celebratedThisYear(p))) return false;
+    if (businessFilter === "none" && p.business_id) return false;
+    if (businessFilter && businessFilter !== "none" && String(p.business_id) !== businessFilter) return false;
+    if (locationFilter === "none" && personRegion(p)) return false;
+    if (locationFilter && locationFilter !== "none" && personRegion(p) !== locationFilter) return false;
+    if (!matchesBirthdayFilter(p, birthdayFilter)) return false;
+    if (infoFilter && !infoFilter(p)) return false;
     if (!filterText) return true;
     const businessName = businessNameFor(p.business_id) || "";
-    const location = [p.city, p.state, p.country].filter(Boolean).join(", ");
-    const haystack = `${p.name} ${businessName} ${p.title || ""} ${location}`.toLowerCase();
+    const haystack = `${p.name} ${businessName} ${p.title || ""} ${personLocation(p)} ${p.email || ""}`.toLowerCase();
     return haystack.includes(filterText);
   });
 
-  const valueFn = PEOPLE_SORT_VALUE[peopleSortKey];
-  return filtered.sort((a, b) => {
-    const av = valueFn(a);
-    const bv = valueFn(b);
-    if (av < bv) return -1 * peopleSortDir;
-    if (av > bv) return peopleSortDir;
-    return a.name.localeCompare(b.name);
-  });
+  const valueFn = PEOPLE_SORT_VALUE[peopleTable.sortKey];
+  return filtered.sort((a, b) =>
+    compareNullsLast(valueFn(a), valueFn(b), peopleTable.sortDir) || a.name.localeCompare(b.name));
 }
-
-function updatePeopleSortIndicators() {
-  PEOPLE_SORT_HEADERS.forEach(({ id, key }) => {
-    document.getElementById(id + "Indicator").textContent =
-      key === peopleSortKey ? (peopleSortDir === 1 ? " ▲" : " ▼") : "";
-  });
-}
-
-PEOPLE_SORT_HEADERS.forEach(({ id, key }) => {
-  document.getElementById(id).addEventListener("click", () => {
-    if (peopleSortKey === key) { peopleSortDir *= -1; } else { peopleSortKey = key; peopleSortDir = 1; }
-    renderPeopleTable();
-  });
-});
-
-document.getElementById("peopleFilterInput").addEventListener("input", () => renderPeopleTable());
-document.getElementById("peopleNotCelebratedFilter").addEventListener("change", () => renderPeopleTable());
 
 // ---------- people table ----------
 function renderPeopleTable() {
   const bodyEl = document.getElementById("peopleTableBody");
-  updatePeopleSortIndicators();
+  peopleTable.sync();
+  peopleTable.setCount(0, people.length);
 
   if (!people.length) {
     bodyEl.innerHTML = `<tr><td colspan="7" class="journal-empty">No people tracked yet — add one above.</td></tr>`;
@@ -149,6 +219,7 @@ function renderPeopleTable() {
   }
 
   const visible = getVisiblePeople();
+  peopleTable.setCount(visible.length, people.length);
   if (!visible.length) {
     bodyEl.innerHTML = `<tr><td colspan="7" class="journal-empty">No people match your filter.</td></tr>`;
     return;
@@ -251,6 +322,7 @@ function openPersonDrawer(personId) {
   openPersonId = person.id;
 
   document.getElementById("personDrawerTitle").textContent = person.name;
+  document.getElementById("personName").value = person.name;
   document.getElementById("personBusiness").innerHTML = businessSelectHtml(person.business_id);
   document.getElementById("personTitle").value = person.title || "";
   document.getElementById("personLinkedin").value = person.linkedin_url || "";
@@ -298,6 +370,7 @@ document.getElementById("personDetailsForm").addEventListener("submit", async (e
   if (openPersonId == null) return;
 
   const update = {
+    name: document.getElementById("personName").value.trim(),
     business_id: document.getElementById("personBusiness").value || null,
     title: document.getElementById("personTitle").value.trim() || null,
     linkedin_url: document.getElementById("personLinkedin").value.trim() || null,
@@ -310,9 +383,14 @@ document.getElementById("personDetailsForm").addEventListener("submit", async (e
     birthday: document.getElementById("personBirthday").value.trim() || null,
   };
 
+  if (!update.name) { alert("Name can't be empty."); return; }
+
   const { error } = await sb.from("people").update(update).eq("id", openPersonId);
   if (error) { alert("Failed to save contact details: " + error.message); return; }
+  document.getElementById("personDrawerTitle").textContent = update.name;
   await loadCrmData();
+  // Contact badges on the Businesses subtab show name + title + business link.
+  if (typeof loadBusinessesData === "function" && typeof businessesLoadedOnce !== "undefined" && businessesLoadedOnce) loadBusinessesData();
   // The rail can be opened from the Today dashboard's birthdays — keep that in sync.
   if (typeof todayLoadedOnce !== "undefined" && todayLoadedOnce) loadTodayData();
 });

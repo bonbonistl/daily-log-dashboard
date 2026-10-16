@@ -28,6 +28,7 @@ async function loadPaperData() {
   }
 
   paperDocs = res.data;
+  fillPaperFilterSelects();
 
   document.getElementById("paperLoading").classList.add("hidden");
   document.getElementById("paperPanel").classList.remove("hidden");
@@ -37,17 +38,6 @@ async function loadPaperData() {
 }
 
 // ---------- paper table: sort + filter ----------
-const PAPER_SORT_HEADERS = [
-  { id: "paperSortDate", key: "date" },
-  { id: "paperSortType", key: "type" },
-  { id: "paperSortVendor", key: "vendor" },
-  { id: "paperSortDetails", key: "details" },
-  { id: "paperSortAmount", key: "amount" },
-  { id: "paperSortFolder", key: "folder" },
-];
-let paperSortKey = "date";
-let paperSortDir = -1;
-
 // Raw (possibly null) values — kept separate from display formatting so missing
 // values can be pinned to the end of the list regardless of sort direction.
 const PAPER_SORT_VALUE = {
@@ -57,46 +47,83 @@ const PAPER_SORT_VALUE = {
   details: (p) => (p.details ? p.details.toLowerCase() : null),
   amount: (p) => (p.amount == null ? null : Number(p.amount)),
   folder: (p) => (p.drive_folder ? 1 : 0),
+  added: (p) => p.created_at || null,
 };
 
+const paperTable = createTableControls({
+  storageKey: "paper",
+  render: () => renderPaperTable(),
+  headers: [
+    { id: "paperSortDate", key: "date" },
+    { id: "paperSortType", key: "type" },
+    { id: "paperSortVendor", key: "vendor" },
+    { id: "paperSortDetails", key: "details" },
+    { id: "paperSortAmount", key: "amount" },
+    { id: "paperSortFolder", key: "folder" },
+  ],
+  sortOptions: [
+    { key: "date", label: "Date" },
+    { key: "type", label: "Type" },
+    { key: "vendor", label: "Vendor" },
+    { key: "details", label: "Details" },
+    { key: "amount", label: "Amount" },
+    { key: "folder", label: "Has scan" },
+    { key: "added", label: "Date added" },
+  ],
+  defaultSort: { key: "date", dir: -1 },
+  defaultDir: (key) => (["date", "amount", "added"].includes(key) ? -1 : 1),
+  controlIds: [
+    "paperFilterInput", "paperTypeFilter", "paperVendorFilter", "paperFromFilter",
+    "paperToFilter", "paperMinFilter", "paperMaxFilter", "paperScanFilter",
+  ],
+  sortSelectId: "paperSortSelect",
+  sortDirId: "paperSortDirBtn",
+  clearBtnId: "paperClearFiltersBtn",
+  countId: "paperTableCount",
+});
+
+// Type + vendor choices come from the loaded documents.
+function fillPaperFilterSelects() {
+  const distinct = (field) => [...new Set(paperDocs.map((p) => p[field]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  fillFilterSelect(document.getElementById("paperTypeFilter"), [
+    { value: "", label: "Any type" },
+    ...distinct("type").map((t) => ({ value: t, label: t })),
+  ]);
+  fillFilterSelect(document.getElementById("paperVendorFilter"), [
+    { value: "", label: "Any vendor" },
+    ...distinct("vendor").map((v) => ({ value: v, label: v })),
+  ]);
+}
+
 function getVisiblePaperDocs() {
-  const filterText = document.getElementById("paperFilterInput").value.trim().toLowerCase();
+  const val = (id) => document.getElementById(id).value;
+  const filterText = val("paperFilterInput").trim().toLowerCase();
+  const typeFilter = val("paperTypeFilter");
+  const vendorFilter = val("paperVendorFilter");
+  const from = val("paperFromFilter");
+  const to = val("paperToFilter");
+  const min = val("paperMinFilter") === "" ? null : Number(val("paperMinFilter"));
+  const max = val("paperMaxFilter") === "" ? null : Number(val("paperMaxFilter"));
+  const scanFilter = val("paperScanFilter");
 
   const filtered = paperDocs.filter((p) => {
+    if (typeFilter && p.type !== typeFilter) return false;
+    if (vendorFilter && p.vendor !== vendorFilter) return false;
+    // A date range excludes undated documents; so does an amount range for ones with no amount.
+    if (from && !(p.doc_date && p.doc_date >= from)) return false;
+    if (to && !(p.doc_date && p.doc_date <= to)) return false;
+    if (min != null && !(p.amount != null && Number(p.amount) >= min)) return false;
+    if (max != null && !(p.amount != null && Number(p.amount) <= max)) return false;
+    if (scanFilter === "yes" && !p.drive_folder) return false;
+    if (scanFilter === "no" && p.drive_folder) return false;
     if (!filterText) return true;
     const haystack = `${p.type || ""} ${p.vendor || ""} ${p.details || ""}`.toLowerCase();
     return haystack.includes(filterText);
   });
 
-  const valueFn = PAPER_SORT_VALUE[paperSortKey];
-  return filtered.sort((a, b) => {
-    const av = valueFn(a);
-    const bv = valueFn(b);
-    // Missing values always sort last, independent of ascending/descending toggling.
-    if (av == null && bv == null) return 0;
-    if (av == null) return 1;
-    if (bv == null) return -1;
-    if (av < bv) return -1 * paperSortDir;
-    if (av > bv) return paperSortDir;
-    return 0;
-  });
+  const valueFn = PAPER_SORT_VALUE[paperTable.sortKey];
+  return filtered.sort((a, b) => compareNullsLast(valueFn(a), valueFn(b), paperTable.sortDir));
 }
-
-function updatePaperSortIndicators() {
-  PAPER_SORT_HEADERS.forEach(({ id, key }) => {
-    document.getElementById(id + "Indicator").textContent =
-      key === paperSortKey ? (paperSortDir === 1 ? " ▲" : " ▼") : "";
-  });
-}
-
-PAPER_SORT_HEADERS.forEach(({ id, key }) => {
-  document.getElementById(id).addEventListener("click", () => {
-    if (paperSortKey === key) { paperSortDir *= -1; } else { paperSortKey = key; paperSortDir = key === "date" ? -1 : 1; }
-    renderPaperTable();
-  });
-});
-
-document.getElementById("paperFilterInput").addEventListener("input", () => renderPaperTable());
 
 // ---------- paper table ----------
 function formatPaperDate(dateStr) {
@@ -111,7 +138,8 @@ function formatPaperAmount(amount) {
 
 function renderPaperTable() {
   const bodyEl = document.getElementById("paperTableBody");
-  updatePaperSortIndicators();
+  paperTable.sync();
+  paperTable.setCount(0, paperDocs.length);
 
   if (!paperDocs.length) {
     bodyEl.innerHTML = `<tr><td colspan="6" class="journal-empty">No paper tracked yet.</td></tr>`;
@@ -119,6 +147,8 @@ function renderPaperTable() {
   }
 
   const visible = getVisiblePaperDocs();
+  const total = visible.reduce((sum, p) => sum + (p.amount == null ? 0 : Number(p.amount)), 0);
+  paperTable.setCount(visible.length, paperDocs.length, `${formatPaperAmount(total)} total`);
   if (!visible.length) {
     bodyEl.innerHTML = `<tr><td colspan="6" class="journal-empty">No documents match your filter.</td></tr>`;
     return;

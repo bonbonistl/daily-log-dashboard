@@ -3,6 +3,7 @@ let businesses = []; // [{id, name, careers_url, notes, created_at}]
 let jobOpenings = []; // [{id, business_id, title, url, posted_date, status, applied_date, status_changed_at, notes, created_at}]
 let businessPeople = []; // [{id, name, title, business_id}] — the full CRM roster, used for the table's Contacts column and the rail's link/add-contact controls
 let businessCareersChecks = []; // [{id, business_id, checked_at}] — history of "I checked the careers page" clicks, for the currently open drawer only
+let businessLastChecked = {}; // business_id → most recent checked_at, for every business — drives the table's "Last careers check" sort/filter
 let openBusinessId = null; // id of the business currently shown in the side rail, or null if closed
 let openOpeningId = null; // id of the job opening currently shown in its own side rail, or null if closed
 
@@ -37,18 +38,19 @@ async function loadBusinessesData() {
     sb.from("businesses").select("*").order("name", { ascending: true }),
     sb.from("job_openings").select("*").order("created_at", { ascending: false }),
     sb.from("people").select("id, name, title, business_id").order("name", { ascending: true }),
+    sb.from("business_careers_checks").select("business_id, checked_at"),
   ]);
 
-  let businessesRes, openingsRes, peopleRes;
+  let businessesRes, openingsRes, peopleRes, checksRes;
   try {
-    [businessesRes, openingsRes, peopleRes] = await withTimeout(fetchPromise, 15000, "Loading business data");
+    [businessesRes, openingsRes, peopleRes, checksRes] = await withTimeout(fetchPromise, 15000, "Loading business data");
   } catch (e) {
     document.getElementById("businessesLoading").textContent = e.message;
     document.getElementById("businessesLoading").classList.remove("hidden");
     return;
   }
 
-  const error = businessesRes.error || openingsRes.error || peopleRes.error;
+  const error = businessesRes.error || openingsRes.error || peopleRes.error || checksRes.error;
   if (error) {
     document.getElementById("businessesLoading").textContent = "Error loading data: " + error.message;
     document.getElementById("businessesLoading").classList.remove("hidden");
@@ -58,6 +60,10 @@ async function loadBusinessesData() {
   businesses = businessesRes.data;
   jobOpenings = openingsRes.data;
   businessPeople = peopleRes.data;
+  businessLastChecked = {};
+  checksRes.data.forEach((c) => {
+    if (!businessLastChecked[c.business_id] || c.checked_at > businessLastChecked[c.business_id]) businessLastChecked[c.business_id] = c.checked_at;
+  });
 
   document.getElementById("businessesLoading").classList.add("hidden");
   document.getElementById("businessesPanel").classList.remove("hidden");
@@ -123,15 +129,17 @@ function jobStatusSelectHtml(selected) {
 }
 
 // ---------- businesses table: sort + filter ----------
-const BUSINESS_SORT_HEADERS = [
-  { id: "businessSortName", key: "name" },
-  { id: "businessSortPmf", key: "pmf" },
-  { id: "businessSortContacts", key: "contacts" },
-  { id: "businessSortCareers", key: "careers" },
-  { id: "businessSortOpenings", key: "openings" },
-];
-let businessSortKey = "name";
-let businessSortDir = 1;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const daysSince = (iso) => (iso ? (Date.now() - new Date(iso).getTime()) / DAY_MS : null);
+
+// Most recent activity on any active opening: a status change, or when it was added.
+function latestOpeningActivity(b) {
+  const stamps = activeJobOpenings()
+    .filter((o) => o.business_id === b.id)
+    .map((o) => o.status_changed_at || o.created_at)
+    .filter(Boolean);
+  return stamps.length ? stamps.sort().at(-1) : null;
+}
 
 const BUSINESS_SORT_VALUE = {
   name: (b) => b.name.toLowerCase(),
@@ -139,53 +147,97 @@ const BUSINESS_SORT_VALUE = {
   contacts: (b) => businessPeople.filter((p) => p.business_id === b.id).length,
   careers: (b) => (b.careers_url ? 1 : 0),
   openings: (b) => activeJobOpenings().filter((o) => o.business_id === b.id).length,
+  checked: (b) => businessLastChecked[b.id] || null,
+  activity: latestOpeningActivity,
+  added: (b) => b.created_at || null,
 };
 
+const businessTable = createTableControls({
+  storageKey: "businesses",
+  render: () => renderBusinessesTable(),
+  headers: [
+    { id: "businessSortName", key: "name" },
+    { id: "businessSortPmf", key: "pmf" },
+    { id: "businessSortContacts", key: "contacts" },
+    { id: "businessSortCareers", key: "careers" },
+    { id: "businessSortOpenings", key: "openings" },
+  ],
+  sortOptions: [
+    { key: "name", label: "Name" },
+    { key: "pmf", label: "PMF" },
+    { key: "contacts", label: "# Contacts" },
+    { key: "careers", label: "Careers link" },
+    { key: "openings", label: "# Openings" },
+    { key: "checked", label: "Last careers check" },
+    { key: "activity", label: "Latest opening activity" },
+    { key: "added", label: "Date added" },
+  ],
+  defaultSort: { key: "name", dir: 1 },
+  // Counts and dates read best biggest/newest first.
+  defaultDir: (key) => (["name", "careers"].includes(key) ? 1 : -1),
+  controlIds: [
+    "businessFilterInput", "businessPmfOnlyFilter", "businessStatusFilter", "businessContactsFilter",
+    "businessCareersFilter", "businessCheckedFilter", "businessReachedOutFilter",
+  ],
+  sortSelectId: "businessSortSelect",
+  sortDirId: "businessSortDirBtn",
+  clearBtnId: "businessClearFiltersBtn",
+  countId: "businessTableCount",
+  onClear: () => { businessFunnelFilter = null; renderBusinessesCards(); },
+});
+
+fillFilterSelect(document.getElementById("businessStatusFilter"), [
+  { value: "", label: "Any opening status" },
+  ...JOB_STATUSES.filter((st) => !ARCHIVED_JOB_STATUSES.includes(st.key)).map((st) => ({ value: st.key, label: `Has: ${st.label}` })),
+]);
+
 function getVisibleBusinesses() {
-  const filterText = document.getElementById("businessFilterInput").value.trim().toLowerCase();
+  const val = (id) => document.getElementById(id).value;
+  const filterText = val("businessFilterInput").trim().toLowerCase();
   const pmfOnly = document.getElementById("businessPmfOnlyFilter").checked;
+  const statusFilter = val("businessStatusFilter");
+  const contactsFilter = val("businessContactsFilter");
+  const careersFilter = val("businessCareersFilter");
+  const checkedFilter = val("businessCheckedFilter");
+  const reachedOutFilter = val("businessReachedOutFilter");
 
   const filtered = businesses.filter((b) => {
     if (pmfOnly && !b.pmf) return false;
+    const bizOpenings = activeJobOpenings().filter((o) => o.business_id === b.id);
     if (businessFunnelFilter) {
-      const bizOpenings = activeJobOpenings().filter((o) => o.business_id === b.id);
       const inStage = businessFunnelFilter === "tracked"
         ? bizOpenings.length > 0
         : bizOpenings.some((o) => o.status === businessFunnelFilter);
       if (!inStage) return false;
     }
+    if (statusFilter && !bizOpenings.some((o) => o.status === statusFilter)) return false;
+
+    const contactCount = businessPeople.filter((p) => p.business_id === b.id).length;
+    if (contactsFilter === "yes" && !contactCount) return false;
+    if (contactsFilter === "no" && contactCount) return false;
+
+    if (careersFilter === "yes" && !b.careers_url) return false;
+    if (careersFilter === "no" && b.careers_url) return false;
+
+    const age = daysSince(businessLastChecked[b.id]);
+    if (checkedFilter === "7" && !(age != null && age < 7)) return false;
+    if (checkedFilter === "stale7" && age != null && age < 7) return false;
+    if (checkedFilter === "stale30" && age != null && age < 30) return false;
+    if (checkedFilter === "never" && age != null) return false;
+
+    if (reachedOutFilter === "yes" && !bizOpenings.some((o) => o.reached_out)) return false;
+    if (reachedOutFilter === "no" && (!bizOpenings.length || bizOpenings.some((o) => o.reached_out))) return false;
+
     if (!filterText) return true;
     const contactNames = businessPeople.filter((p) => p.business_id === b.id).map((p) => p.name).join(" ");
     const haystack = `${b.name} ${contactNames} ${b.careers_url || ""} ${b.notes || ""}`.toLowerCase();
     return haystack.includes(filterText);
   });
 
-  const valueFn = BUSINESS_SORT_VALUE[businessSortKey];
-  return filtered.sort((a, b) => {
-    const av = valueFn(a);
-    const bv = valueFn(b);
-    if (av < bv) return -1 * businessSortDir;
-    if (av > bv) return businessSortDir;
-    return a.name.localeCompare(b.name);
-  });
+  const valueFn = BUSINESS_SORT_VALUE[businessTable.sortKey];
+  return filtered.sort((a, b) =>
+    compareNullsLast(valueFn(a), valueFn(b), businessTable.sortDir) || a.name.localeCompare(b.name));
 }
-
-function updateBusinessSortIndicators() {
-  BUSINESS_SORT_HEADERS.forEach(({ id, key }) => {
-    document.getElementById(id + "Indicator").textContent =
-      key === businessSortKey ? (businessSortDir === 1 ? " ▲" : " ▼") : "";
-  });
-}
-
-BUSINESS_SORT_HEADERS.forEach(({ id, key }) => {
-  document.getElementById(id).addEventListener("click", () => {
-    if (businessSortKey === key) { businessSortDir *= -1; } else { businessSortKey = key; businessSortDir = 1; }
-    renderBusinessesTable();
-  });
-});
-
-document.getElementById("businessFilterInput").addEventListener("input", () => renderBusinessesTable());
-document.getElementById("businessPmfOnlyFilter").addEventListener("change", () => renderBusinessesTable());
 
 document.getElementById("businessFunnelFilterBadge").addEventListener("click", () => {
   businessFunnelFilter = null;
@@ -206,8 +258,9 @@ function updateFunnelFilterBadge() {
 // ---------- businesses table ----------
 function renderBusinessesTable() {
   const bodyEl = document.getElementById("businessesTableBody");
-  updateBusinessSortIndicators();
+  businessTable.sync();
   updateFunnelFilterBadge();
+  businessTable.setCount(0, businesses.length);
 
   if (!businesses.length) {
     bodyEl.innerHTML = `<tr><td colspan="6" class="journal-empty">No businesses tracked yet — add one above.</td></tr>`;
@@ -215,6 +268,7 @@ function renderBusinessesTable() {
   }
 
   const visible = getVisibleBusinesses();
+  businessTable.setCount(visible.length, businesses.length);
   if (!visible.length) {
     bodyEl.innerHTML = `<tr><td colspan="6" class="journal-empty">No businesses match your filter.</td></tr>`;
     return;
@@ -234,7 +288,13 @@ function renderBusinessesTable() {
 
     return `
       <tr data-business-id="${b.id}">
-        <td><button type="button" class="job-company-name-btn">${b.name}</button></td>
+        <td>
+          <div class="job-name-cell">
+            <button type="button" class="job-company-name-btn">${b.name}</button>
+            <button type="button" class="job-rename-btn" title="Rename">✎</button>
+          </div>
+          ${businessLastChecked[b.id] ? `<div class="job-table-sub">careers checked ${fmtShort(toLocalDateStr(new Date(businessLastChecked[b.id])))}</div>` : ""}
+        </td>
         <td class="job-table-pmf"><input type="checkbox" class="pmf-checkbox" title="Product Market Fit — you'd be a good fit there" ${b.pmf ? "checked" : ""} /></td>
         <td>${contactsCell}</td>
         <td>${careersCell}</td>
@@ -255,6 +315,50 @@ function renderBusinessesTable() {
   }).join("");
 
   bindBusinessRowEvents();
+}
+
+// ---------- rename (inline in the table, or from the rail's Name field) ----------
+function startInlineBusinessRename(rowEl) {
+  const business = businesses.find((b) => String(b.id) === rowEl.dataset.businessId);
+  const cell = rowEl.querySelector(".job-name-cell");
+  if (!business || cell.querySelector("input")) return;
+
+  cell.innerHTML = `<input type="text" class="job-rename-input" maxlength="200" />`;
+  const input = cell.querySelector("input");
+  input.value = business.name;
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const name = input.value.trim();
+    if (save && name && name !== business.name) await renameBusiness(business.id, name);
+    else renderBusinessesTable();
+  };
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    if (e.key === "Escape") { e.stopPropagation(); finish(false); }
+  });
+  input.addEventListener("blur", () => finish(true));
+}
+
+async function renameBusiness(businessId, name) {
+  const { error } = await sb.from("businesses").update({ name }).eq("id", businessId);
+  if (error) { alert("Failed to rename business: " + error.message); renderBusinessesTable(); return; }
+  if (String(openBusinessId) === String(businessId)) {
+    document.getElementById("businessDrawerTitle").textContent = name;
+    document.getElementById("businessName").value = name;
+  }
+  await loadBusinessesData();
+  refreshAfterBusinessRename();
+}
+
+// Business names also show in the CRM table/rail and the Today dashboard's active jobs.
+function refreshAfterBusinessRename() {
+  if (typeof crmLoadedOnce !== "undefined" && crmLoadedOnce) loadCrmData();
+  if (typeof todayLoadedOnce !== "undefined" && todayLoadedOnce) loadTodayData();
 }
 
 // ---------- job listing archive ----------
@@ -339,6 +443,9 @@ function renderJobOpening(o) {
 function bindBusinessRowEvents() {
   document.querySelectorAll("#businessesTableBody .job-company-name-btn").forEach((btn) => {
     btn.addEventListener("click", () => openBusinessDrawer(btn.closest("[data-business-id]").dataset.businessId));
+  });
+  document.querySelectorAll("#businessesTableBody .job-rename-btn").forEach((btn) => {
+    btn.addEventListener("click", () => startInlineBusinessRename(btn.closest("[data-business-id]")));
   });
   document.querySelectorAll("#businessesTableBody .job-company-remove").forEach((btn) => {
     btn.addEventListener("click", () => removeBusiness(btn));
@@ -540,8 +647,10 @@ document.getElementById("businessDetailsForm").addEventListener("submit", async 
 
   const { error } = await sb.from("businesses").update(update).eq("id", openBusinessId);
   if (error) { alert("Failed to save business details: " + error.message); return; }
+  const renamed = businesses.find((b) => b.id === openBusinessId)?.name !== update.name;
   document.getElementById("businessDrawerTitle").textContent = update.name;
   await loadBusinessesData();
+  if (renamed) refreshAfterBusinessRename();
 });
 
 // ---------- opening detail rail ----------
@@ -639,6 +748,8 @@ document.getElementById("businessLogCareersCheckBtn").addEventListener("click", 
   const { error } = await sb.from("business_careers_checks").insert({ business_id: openBusinessId });
   if (error) { alert("Failed to log check: " + error.message); btn.disabled = false; return; }
 
+  businessLastChecked[openBusinessId] = new Date().toISOString();
+  renderBusinessesTable();
   await loadBusinessCareersChecks();
   btn.disabled = false;
 });

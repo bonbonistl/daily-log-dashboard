@@ -449,6 +449,37 @@
           <label class="table-filter-checkbox"><input type="checkbox" id="businessPmfOnlyFilter" /> PMF only</label>
           <button type="button" id="businessFunnelFilterBadge" class="funnel-filter-badge hidden"></button>
         </div>
+        <div class="table-filter-row table-filter-advanced">
+          <select id="businessStatusFilter" title="Has an opening in this status"></select>
+          <select id="businessContactsFilter">
+            <option value="">Any contacts</option>
+            <option value="yes">Has contacts</option>
+            <option value="no">No contacts</option>
+          </select>
+          <select id="businessCareersFilter">
+            <option value="">Any careers link</option>
+            <option value="yes">Has careers link</option>
+            <option value="no">Missing careers link</option>
+          </select>
+          <select id="businessCheckedFilter" title="When you last logged a careers page check">
+            <option value="">Any careers check</option>
+            <option value="7">Checked in last 7 days</option>
+            <option value="stale7">Not checked in 7+ days</option>
+            <option value="stale30">Not checked in 30+ days</option>
+            <option value="never">Never checked</option>
+          </select>
+          <select id="businessReachedOutFilter">
+            <option value="">Any outreach</option>
+            <option value="yes">Reached out on an opening</option>
+            <option value="no">Has openings, not reached out</option>
+          </select>
+          <span class="table-sort-controls">
+            <label>Sort by <select id="businessSortSelect"></select></label>
+            <button type="button" id="businessSortDirBtn" class="table-sort-dir"></button>
+          </span>
+          <button type="button" id="businessClearFiltersBtn" class="table-clear-btn">Clear</button>
+          <span id="businessTableCount" class="table-count"></span>
+        </div>
 
         <table class="data-table">
           <thead>
@@ -491,6 +522,39 @@
         <div class="table-filter-row">
           <input type="text" id="peopleFilterInput" placeholder="Filter by name, business, title, or location…" />
           <label class="table-filter-checkbox"><input type="checkbox" id="peopleNotCelebratedFilter" /> Not yet celebrated</label>
+        </div>
+        <div class="table-filter-row table-filter-advanced">
+          <select id="peopleBusinessFilter"></select>
+          <select id="peopleLocationFilter"></select>
+          <select id="peopleBirthdayFilter">
+            <option value="">Any birthday</option>
+            <option value="30">Birthday in next 30 days</option>
+            <option value="this">Birthday this month</option>
+            <option value="next">Birthday next month</option>
+            <option value="none">No birthday saved</option>
+            <option value="m1">January</option><option value="m2">February</option><option value="m3">March</option>
+            <option value="m4">April</option><option value="m5">May</option><option value="m6">June</option>
+            <option value="m7">July</option><option value="m8">August</option><option value="m9">September</option>
+            <option value="m10">October</option><option value="m11">November</option><option value="m12">December</option>
+          </select>
+          <select id="peopleInfoFilter">
+            <option value="">Any contact info</option>
+            <option value="has_email">Has email</option>
+            <option value="has_phone">Has phone</option>
+            <option value="has_linkedin">Has LinkedIn</option>
+            <option value="has_instagram">Has Instagram</option>
+            <option value="no_email">Missing email</option>
+            <option value="no_phone">Missing phone</option>
+            <option value="no_linkedin">Missing LinkedIn</option>
+            <option value="no_location">Missing location</option>
+            <option value="no_title">Missing title</option>
+          </select>
+          <span class="table-sort-controls">
+            <label>Sort by <select id="peopleSortSelect"></select></label>
+            <button type="button" id="peopleSortDirBtn" class="table-sort-dir"></button>
+          </span>
+          <button type="button" id="peopleClearFiltersBtn" class="table-clear-btn">Clear</button>
+          <span id="peopleTableCount" class="table-count"></span>
         </div>
 
         <table class="data-table">
@@ -620,6 +684,9 @@
       <button id="personDrawerCloseBtn" aria-label="Close">&times;</button>
     </div>
     <form id="personDetailsForm" class="detail-form">
+      <label>Name
+        <input type="text" id="personName" maxlength="200" required />
+      </label>
       <label>Business
         <select id="personBusiness"></select>
       </label>
@@ -695,6 +762,25 @@
       <div class="table-filter-row">
         <input type="text" id="paperFilterInput" placeholder="Filter by type, vendor, or details…" />
       </div>
+      <div class="table-filter-row table-filter-advanced">
+        <select id="paperTypeFilter"></select>
+        <select id="paperVendorFilter"></select>
+        <label class="table-filter-field">From <input type="date" id="paperFromFilter" /></label>
+        <label class="table-filter-field">To <input type="date" id="paperToFilter" /></label>
+        <label class="table-filter-field">$ <input type="number" id="paperMinFilter" placeholder="min" step="0.01" min="0" /></label>
+        <label class="table-filter-field">– <input type="number" id="paperMaxFilter" placeholder="max" step="0.01" min="0" /></label>
+        <select id="paperScanFilter">
+          <option value="">Any scan</option>
+          <option value="yes">Has Drive scan</option>
+          <option value="no">Missing scan</option>
+        </select>
+        <span class="table-sort-controls">
+          <label>Sort by <select id="paperSortSelect"></select></label>
+          <button type="button" id="paperSortDirBtn" class="table-sort-dir"></button>
+        </span>
+        <button type="button" id="paperClearFiltersBtn" class="table-clear-btn">Clear</button>
+        <span id="paperTableCount" class="table-count"></span>
+      </div>
 
       <table class="data-table">
         <thead>
@@ -746,6 +832,7 @@
   <script src="food_plan.js"></script>
   <script src="insights.js"></script>
   <script src="groceries.js"></script>
+  <script src="table-tools.js"></script>
   <script src="businesses.js"></script>
   <script src="crm.js"></script>
   <script src="paper.js"></script>
