@@ -1,7 +1,7 @@
 // "Today" dashboard — a time-aware landing page that pulls the few things that
 // matter right now from every other tab: habits due in the current time slot
 // (plus anything still open from earlier), today's/upcoming birthdays, unanswered
-// prayer requests, active job openings, and today's food/exercise numbers. Fetches its own data rather
+// prayer requests, Google Calendar events, active job openings, and today's food/exercise numbers. Fetches its own data rather
 // than depending on the other tabs' lazy loads, so it works as the first screen.
 
 // When each habit time slot "starts", in minutes after midnight. The current
@@ -96,6 +96,7 @@ function renderTodayDashboard() {
   renderTodayJobs(now);
   renderTodayHealth(todayStr);
   loadTodayWeather();
+  loadTodayCalendar();
 }
 
 // ---------- weather (Open-Meteo, no API key) ----------
@@ -174,6 +175,126 @@ function renderTodayWeather() {
 }
 
 // ---------- greeting ----------
+// ---------- calendar (Google "secret iCal address" feeds, via the calendar-feed edge function) ----------
+const CALENDAR_TTL_MS = 10 * 60 * 1000;
+let todayCalendar = null; // { fetchedAt, day, events, errors }
+let todayCalendarInflight = null;
+
+// Called by settings.js after calendars are added/removed
+function refreshTodayCalendar() {
+  todayCalendar = null;
+  loadTodayCalendar();
+}
+
+async function fetchCalendarFeed(url) {
+  const { data, error } = await sb.functions.invoke("calendar-feed", { body: { url } });
+  if (error) {
+    let msg = error.message;
+    try { msg = (await error.context.json()).error || msg; } catch (_) { /* not JSON */ }
+    throw new Error(msg);
+  }
+  return data;
+}
+
+// Every occurrence (recurring ones expanded) that overlaps [dayStart, dayEnd).
+function calendarEventsForDay(icsText, calName, dayStart, dayEnd) {
+  const root = new ICAL.Component(ICAL.parse(icsText));
+  root.getAllSubcomponents("vtimezone").forEach((tz) => ICAL.TimezoneService.register(tz));
+  const vevents = root.getAllSubcomponents("vevent");
+
+  // Edited instances of a recurring event come as separate VEVENTs with a RECURRENCE-ID.
+  const masters = new Map();
+  const exceptions = [];
+  vevents.forEach((v) => {
+    const ev = new ICAL.Event(v);
+    if (ev.isRecurrenceException()) exceptions.push(ev);
+    else masters.set(ev.uid, ev);
+  });
+  exceptions.forEach((ex) => masters.get(ex.uid)?.relateException(ex));
+
+  const out = [];
+  const add = (ev, start, end) => {
+    if ((ev.component.getFirstPropertyValue("status") || "").toUpperCase() === "CANCELLED") return;
+    const allDay = start.isDate;
+    const s = start.toJSDate();
+    const e = end ? end.toJSDate() : new Date(s.getTime() + (allDay ? 86400000 : 0));
+    if (s < dayEnd && (e > dayStart || (e.getTime() === s.getTime() && s >= dayStart))) {
+      out.push({ title: ev.summary || "(No title)", location: ev.location || "", start: s, end: e, allDay, cal: calName });
+    }
+  };
+
+  masters.forEach((ev) => {
+    if (!ev.isRecurring()) { add(ev, ev.startDate, ev.endDate); return; }
+    const it = ev.iterator();
+    for (let next, n = 0; (next = it.next()) && n < 20000; n++) {
+      if (next.toJSDate() >= dayEnd) break;
+      const d = ev.getOccurrenceDetails(next);
+      add(d.item, d.startDate, d.endDate);
+    }
+  });
+  return out;
+}
+
+async function loadTodayCalendar() {
+  const day = todayLocalStr();
+  const fresh = todayCalendar && todayCalendar.day === day && Date.now() - todayCalendar.fetchedAt < CALENDAR_TTL_MS;
+  if (fresh || todayCalendarInflight) { renderTodayCalendar(); return; }
+  todayCalendarInflight = loadUserSettings().then(async () => {
+    const cals = calendarSettings();
+    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+    const events = [];
+    const errors = [];
+    await Promise.all(cals.map(async (c) => {
+      try {
+        events.push(...calendarEventsForDay(await fetchCalendarFeed(c.url), c.name, dayStart, dayEnd));
+      } catch (err) {
+        console.warn(`Calendar "${c.name}" failed`, err);
+        errors.push(c.name);
+      }
+    }));
+    events.sort((a, b) => b.allDay - a.allDay || a.start - b.start || a.title.localeCompare(b.title));
+    todayCalendar = { fetchedAt: Date.now(), day, events, errors, multi: cals.length > 1 };
+  })
+    .catch((err) => console.warn("Calendar load failed", err))
+    .finally(() => { todayCalendarInflight = null; renderTodayCalendar(); });
+}
+
+function renderTodayCalendar() {
+  const el = document.getElementById("todayCalendar");
+  const countEl = document.getElementById("todayCalendarCount");
+  if (!el) return;
+  if (!calendarSettings().length) {
+    countEl.textContent = "";
+    el.innerHTML = `<div class="journal-empty">No calendar connected. <button type="button" class="link-btn" onclick="openSettingsDrawer()">Connect Google Calendar in Settings</button></div>`;
+    return;
+  }
+  if (!todayCalendar) { el.innerHTML = `<div class="journal-empty">Loading…</div>`; return; }
+
+  const now = new Date();
+  const { events, errors, multi } = todayCalendar;
+  const fmt = (d) => d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const remaining = events.filter((e) => e.allDay || e.end > now).length;
+  countEl.textContent = events.length ? `${remaining} of ${events.length} left` : "";
+
+  const rows = events.map((e) => {
+    const past = !e.allDay && e.end <= now;
+    const current = !e.allDay && e.start <= now && e.end > now;
+    const when = e.allDay ? "All day" : `${fmt(e.start)} – ${fmt(e.end)}${current ? " · Now" : ""}`;
+    return `
+      <div class="today-row ${current ? "today-row-highlight" : ""} ${past ? "today-row-past" : ""}">
+        <div class="today-row-main">
+          <div class="today-row-title">${escHtml(e.title)}</div>
+          <div class="today-row-sub">${when}${e.location ? ` · ${escHtml(e.location)}` : ""}</div>
+        </div>
+        ${multi ? `<span class="today-item-tag">${escHtml(e.cal)}</span>` : ""}
+      </div>`;
+  }).join("");
+  const errorNote = errors.length
+    ? `<div class="drawer-hint today-calendar-error">Couldn't load: ${errors.map(escHtml).join(", ")}</div>` : "";
+  el.innerHTML = (rows || `<div class="journal-empty">Nothing on the calendar today.</div>`) + errorNote;
+}
+
 function currentHabitSlot(now) {
   const mins = now.getHours() * 60 + now.getMinutes();
   return TIMES_OF_DAY.filter((t) => TODAY_SLOT_STARTS[t] <= mins).pop() || TIMES_OF_DAY[0];

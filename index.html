@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#0f766e" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
 <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
 <link rel="stylesheet" href="style.css" />
 </head>
@@ -160,6 +161,14 @@
       </section>
 
       <section class="today-col">
+        <div class="panel">
+          <div class="panel-heading-row">
+            <h2>Calendar</h2>
+            <span id="todayCalendarCount" class="today-count"></span>
+          </div>
+          <div id="todayCalendar"></div>
+        </div>
+
         <div class="panel">
           <div class="panel-heading-row">
             <h2>Birthdays <span class="hint">next 7 days</span></h2>
@@ -674,6 +683,21 @@
         <button type="button" id="resetLocationBtn">Reset to default</button>
       </div>
       <div id="locationStatus" class="drawer-hint"></div>
+    </div>
+    <div class="detail-form-section">
+      <h3>Google Calendar</h3>
+      <p class="drawer-hint">Shows today's events on the Today tab. In Google Calendar on the web: ⚙︎ Settings → click the calendar under "Settings for my calendars" → <strong>Integrate calendar</strong> → copy <strong>Secret address in iCal format</strong> and paste it here. Add one per calendar you want to see.</p>
+      <div id="calendarList" class="calendar-list"></div>
+      <form id="calendarAddForm" class="detail-form">
+        <label>Name
+          <input type="text" id="calendarName" placeholder="e.g. Personal, Family" maxlength="60" />
+        </label>
+        <label>Secret iCal address
+          <input type="url" id="calendarUrl" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" required />
+        </label>
+        <div class="settings-actions"><button type="submit">Add calendar</button></div>
+      </form>
+      <div id="calendarStatus" class="drawer-hint"></div>
     </div>
   </aside>
 

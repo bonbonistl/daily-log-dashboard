@@ -3,7 +3,7 @@
 
 const DEFAULT_LOCATION = { name: "St. Louis, Missouri", lat: 38.627, lon: -90.199 };
 
-let userSettings = {};          // { location: { name, lat, lon } }
+let userSettings = {};          // { location: { name, lat, lon }, calendars: [{ name, url }] }
 let userSettingsPromise = null; // shared so callers can await the first load
 
 function loadUserSettings() {
@@ -27,7 +27,8 @@ const weatherLocation = () => userSettings.location || DEFAULT_LOCATION;
 
 // ---------- drawer ----------
 function openSettingsDrawer() {
-  loadUserSettings().then(renderSettingsLocation);
+  loadUserSettings().then(() => { renderSettingsLocation(); renderSettingsCalendars(); });
+  setCalendarStatus("");
   document.getElementById("locationSearch").value = "";
   document.getElementById("locationResults").innerHTML = "";
   setLocationStatus("");
@@ -146,4 +147,59 @@ document.getElementById("locationResults").addEventListener("click", (e) => {
     lat: res.latitude,
     lon: res.longitude,
   });
+});
+
+// ---------- Google Calendar (secret iCal addresses) ----------
+const calendarSettings = () => userSettings.calendars || [];
+
+function setCalendarStatus(msg) {
+  document.getElementById("calendarStatus").textContent = msg;
+}
+
+function renderSettingsCalendars() {
+  const cals = calendarSettings();
+  document.getElementById("calendarList").innerHTML = cals.length
+    ? cals.map((c, i) => `
+      <div class="calendar-item">
+        <span>📅 ${escHtml(c.name)}</span>
+        <button type="button" class="calendar-remove" data-i="${i}" title="Remove">Remove</button>
+      </div>`).join("")
+    : `<div class="journal-empty">No calendars connected yet.</div>`;
+}
+
+async function saveCalendars(cals) {
+  if (cals.length) await saveUserSetting("calendars", cals);
+  else {
+    const { error } = await sb.from("user_settings").delete().eq("key", "calendars");
+    if (error) throw error;
+    delete userSettings.calendars;
+  }
+  renderSettingsCalendars();
+  if (typeof refreshTodayCalendar === "function") refreshTodayCalendar();
+}
+
+document.getElementById("calendarAddForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const url = document.getElementById("calendarUrl").value.trim();
+  const name = document.getElementById("calendarName").value.trim() || `Calendar ${calendarSettings().length + 1}`;
+  setCalendarStatus("Checking that address…");
+  try {
+    await fetchCalendarFeed(url); // validates it before saving
+    await saveCalendars([...calendarSettings(), { name, url }]);
+  } catch (err) {
+    setCalendarStatus("Couldn't add: " + err.message);
+    return;
+  }
+  document.getElementById("calendarName").value = "";
+  document.getElementById("calendarUrl").value = "";
+  setCalendarStatus("Connected.");
+});
+
+document.getElementById("calendarList").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".calendar-remove");
+  if (!btn) return;
+  const cals = calendarSettings().filter((_, i) => i !== Number(btn.dataset.i));
+  setCalendarStatus("Saving…");
+  try { await saveCalendars(cals); } catch (err) { setCalendarStatus("Couldn't remove: " + err.message); return; }
+  setCalendarStatus("Removed.");
 });
