@@ -21,7 +21,7 @@ const INACTIVE_JOB_STATUSES = ["declined", "auto_declined", "not_a_match"];
 const JOB_STAGE_RANK = { offered: 0, interviewing: 1, heard_back: 2, applied: 3, watching: 4 };
 const JOB_STALE_DAYS = 10;
 
-let todayData = null; // { practices, habitLog, people, openings, businesses, logRows, planRows }
+let todayData = null; // { practices, habitLog, people, openings, businesses, logRows, planRows, prayers, disruptions }
 let todayLoadedOnce = false;
 let todayShowUpcomingHabits = false;
 // Prayer requests are private — collapsed on every page load so nothing shows over your shoulder.
@@ -51,6 +51,8 @@ async function loadTodayData() {
       .order("log_date", { ascending: true }).order("id", { ascending: true }),
     sb.from("food_plan").select("*").eq("log_date", todayStr),
     sb.from("prayer_requests").select("*, people(name)").is("answered_at", null).order("pray_on", { ascending: true }),
+    // Every cause ever logged (not just today's) so a recurring one like "Sabbath" is a one-click chip.
+    sb.from("rule_of_life_disruptions").select("id, log_date, cause").order("id", { ascending: true }),
   ]);
 
   let results;
@@ -68,7 +70,7 @@ async function loadTodayData() {
     return;
   }
 
-  const [practicesRes, habitLogRes, peopleRes, openingsRes, businessesRes, logRes, planRes, prayersRes] = results;
+  const [practicesRes, habitLogRes, peopleRes, openingsRes, businessesRes, logRes, planRes, prayersRes, disruptionsRes] = results;
   todayData = {
     practices: practicesRes.data,
     habitLog: habitLogRes.data,
@@ -78,6 +80,7 @@ async function loadTodayData() {
     logRows: logRes.data,
     planRows: planRes.data,
     prayers: prayersRes.data,
+    disruptions: disruptionsRes.data,
   };
   todayLoadedOnce = true;
   statusEl.classList.add("hidden");
@@ -91,6 +94,7 @@ function renderTodayDashboard() {
   const todayStr = todayLocalStr();
   renderTodayGreeting(now);
   renderTodayHabits(now, todayStr);
+  renderTodayHappened(todayStr);
   renderTodayBirthdays(now);
   renderTodayPrayers(now);
   renderTodayJobs(now);
@@ -814,4 +818,58 @@ async function toggleTodayPlanItem(label) {
 document.getElementById("todayHealthOpenBtn").addEventListener("click", () => {
   activateTab("health");
   activateHealthSubtab("plan");
+});
+
+// ---------- what happened today (rule_of_life_disruptions) ----------
+// Moved here from the Habits tab, which still shows the 14-day "What's Getting In The Way"
+// trends. Suggestion chips come from every cause ever logged (groupCauses in spiritual.js),
+// minus the ones already logged today, which show below with a remove button.
+function renderTodayHappened(todayStr) {
+  const todays = todayData.disruptions.filter((d) => d.log_date === todayStr);
+  const todaysCauses = new Set(todays.map((d) => d.cause.trim().toLowerCase()));
+  const entries = groupCauses(todayData.disruptions).filter((e) => !todaysCauses.has(e.label.trim().toLowerCase()));
+
+  const sugEl = document.getElementById("todayHappenedSuggestions");
+  sugEl.innerHTML = entries.map((e, i) => `
+    <button type="button" class="disruption-suggestion-chip" data-index="${i}">${escHtml(e.label)}</button>
+  `).join("");
+  sugEl.querySelectorAll(".disruption-suggestion-chip").forEach((btn) => {
+    btn.addEventListener("click", () => logTodayHappened(entries[Number(btn.dataset.index)].label));
+  });
+
+  const listEl = document.getElementById("todayHappenedList");
+  listEl.innerHTML = todays.map((d) => `
+    <span class="disruption-chip" data-id="${d.id}">
+      ${escHtml(d.cause)}
+      <button aria-label="Remove">&times;</button>
+    </span>
+  `).join("");
+  listEl.querySelectorAll(".disruption-chip button").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const { error } = await sb.from("rule_of_life_disruptions").delete().eq("id", btn.closest(".disruption-chip").dataset.id);
+      if (error) { alert("Failed to remove: " + error.message); return; }
+      await afterTodayHappenedChange();
+    });
+  });
+}
+
+async function logTodayHappened(causeOverride) {
+  const input = document.getElementById("todayHappenedCause");
+  const cause = (causeOverride != null ? causeOverride : input.value).trim();
+  if (!cause) return;
+  const { error } = await sb.from("rule_of_life_disruptions").insert({ log_date: todayLocalStr(), cause });
+  if (error) { alert("Failed to log: " + error.message); return; }
+  input.value = "";
+  await afterTodayHappenedChange();
+}
+
+async function afterTodayHappenedChange() {
+  await loadTodayData();
+  // Keep the Habits tab's trend panel in sync if it's already loaded.
+  if (typeof spiritualLoaded !== "undefined" && spiritualLoaded) loadSpiritualData();
+}
+
+document.getElementById("todayHappenedLogBtn").addEventListener("click", () => logTodayHappened());
+document.getElementById("todayHappenedCause").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); logTodayHappened(); }
 });

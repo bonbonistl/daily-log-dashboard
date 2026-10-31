@@ -169,6 +169,22 @@
           <div id="todayHabits"></div>
         </div>
 
+        <div class="panel" id="todayHappenedPanel">
+          <div class="panel-heading-row">
+            <h2>What happened today? <span class="hint">optional — helps spot trends</span></h2>
+          </div>
+          <div class="disruption-form">
+            <div id="todayHappenedSuggestions" class="disruption-suggestions"></div>
+            <div class="disruption-form-row">
+              <input type="text" id="todayHappenedCause" placeholder="e.g. Community group, travel, sick, Sabbath..." maxlength="120" aria-label="What happened today" />
+              <button id="todayHappenedLogBtn">Log it</button>
+            </div>
+            <div id="todayHappenedList" class="disruption-today-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="today-col">
         <div class="panel" id="todayHealthPanel">
           <div class="panel-heading-row">
             <h2>Food &amp; Exercise</h2>
@@ -177,9 +193,7 @@
           <div id="todayHealthCards" class="cards today-cards"></div>
           <div id="todayPlanList"></div>
         </div>
-      </section>
 
-      <section class="today-col">
         <div class="panel" id="todayBirthdaysPanel">
           <div class="panel-heading-row">
             <h2>Birthdays <span class="hint">next 7 days</span></h2>
@@ -340,16 +354,6 @@
         <button id="checkinNextBtn">Next day ›</button>
       </div>
       <div id="checkinGroups" class="checkin-groups rol-checkin-groups"></div>
-
-      <div class="disruption-form">
-        <label for="disruptionCause">What happened today? <span class="hint">optional — helps spot trends</span></label>
-        <div id="disruptionSuggestions" class="disruption-suggestions"></div>
-        <div class="disruption-form-row">
-          <input type="text" id="disruptionCause" placeholder="e.g. Community group, travel, sick, Sabbath..." maxlength="120" />
-          <button id="logDisruptionBtn">Log it</button>
-        </div>
-        <div id="disruptionTodayList" class="disruption-today-list"></div>
-      </div>
     </section>
 
     <section class="cards hidden" id="rolCards"></section>
