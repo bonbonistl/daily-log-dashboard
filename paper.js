@@ -1,6 +1,15 @@
 let paperLoadedOnce = false;
 let paperDocs = []; // [{id, doc_date, type, vendor, details, drive_folder, amount, created_at}]
 
+// drive_folder is stored as a Markdown link ("[2026 08 26 Mercy Eye Care](https://drive…)"),
+// so pull out the URL; a bare URL is accepted too.
+function paperFolderUrl(value) {
+  if (!value) return null;
+  const md = value.match(/\]\((https?:\/\/[^)\s]+)\)/);
+  if (md) return md[1];
+  return /^https?:\/\//.test(value.trim()) ? value.trim() : null;
+}
+
 async function loadPaperData() {
   if (!paperLoadedOnce) {
     document.getElementById("paperLoading").classList.remove("hidden");
@@ -164,7 +173,7 @@ function renderPaperTable() {
         <td>${p.vendor || `<span class="job-table-empty">—</span>`}</td>
         <td>${p.details || `<span class="job-table-empty">—</span>`}</td>
         <td>${amountDisplay || `<span class="job-table-empty">—</span>`}</td>
-        <td>${p.drive_folder ? `<a class="job-careers-link" href="${p.drive_folder}" target="_blank" rel="noopener noreferrer">View ↗</a>` : `<span class="job-table-empty">—</span>`}</td>
+        <td>${paperFolderUrl(p.drive_folder) ? `<a class="job-careers-link" href="${paperFolderUrl(p.drive_folder)}" target="_blank" rel="noopener noreferrer">View ↗</a>` : `<span class="job-table-empty">—</span>`}</td>
       </tr>
     `;
   }).join("");
