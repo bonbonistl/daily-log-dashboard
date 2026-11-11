@@ -9,10 +9,11 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-title" content="LifeOS" />
 <meta name="theme-color" content="#0f766e" />
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-<script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
-<script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" integrity="sha384-gnyZit14c5lnGcarmA166QQjjJXpucw25ogZXuwH3HxxY904zHkBqmxVpelsPorb" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js" integrity="sha384-Emf5ZVIUiarAdhkgtqK+5/Z5qIvM6QoVrS+qAVtfyZVuD5lIHrac0me485+Antp0" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js" integrity="sha384-6SU9o/kopjziIukGhxSpfo75dojAj0O1JWZ+Z/2FdC6rLs6pJvDmRntnUdMS7ht2" crossorigin="anonymous"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1.29.1/index.js"></script>
+<!-- Third-party scripts are pinned to exact versions with integrity hashes: a hijacked CDN release can't silently run with access to family data. -->
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -685,6 +686,33 @@
       <button id="settingsDrawerCloseBtn" aria-label="Close">&times;</button>
     </div>
     <div class="detail-form-section">
+      <h3>Family</h3>
+      <p class="drawer-hint">Paper and House are shared with your family. Everything else is private to each person.</p>
+      <div id="familyList" class="calendar-list"></div>
+      <div id="familyAdminForms" class="hidden">
+        <form id="inviteForm" class="detail-form hidden">
+          <label>Family
+            <select id="inviteFamily"></select>
+          </label>
+          <label>Name
+            <input type="text" id="inviteName" placeholder="e.g. Lauren" maxlength="60" />
+          </label>
+          <label>Google account email
+            <input type="email" id="inviteEmail" placeholder="name@gmail.com" maxlength="200" required />
+          </label>
+          <p class="drawer-hint">They must sign in with this exact Google account. Inviting opens a pre-filled Gmail draft for you to send.</p>
+          <div class="settings-actions"><button type="submit">Invite</button></div>
+        </form>
+        <form id="familyCreateForm" class="detail-form">
+          <div class="plan-add-form">
+            <input type="text" id="newFamilyName" placeholder="New family name, e.g. Thorp Family" maxlength="80" required />
+            <button type="submit">Create family</button>
+          </div>
+        </form>
+      </div>
+      <div id="familyStatus" class="drawer-hint"></div>
+    </div>
+    <div class="detail-form-section">
       <h3>Location</h3>
       <p class="drawer-hint">Used for the weather on Today. Currently: <strong id="currentLocation"></strong></p>
       <form id="locationSearchForm" class="detail-form">
@@ -877,6 +905,7 @@
   <script src="paper.js"></script>
   <script src="frametv.js"></script>
   <script src="settings.js"></script>
+  <script src="family.js"></script>
   <script src="today.js"></script>
   <script src="tabs.js"></script>
   <script src="auth.js"></script>

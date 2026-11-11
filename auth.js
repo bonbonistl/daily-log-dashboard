@@ -1,4 +1,6 @@
-const ALLOWED_EMAIL = "jthorp@gmail.com";
+// Who may use the app is decided server-side by the my_access() RPC: the admin, or anyone
+// whose Google email was invited to a family (their first sign-in activates the invite).
+window.appAccess = null; // { email, is_admin, allowed, families: [{ id, name, role }] }
 
 const authGate = document.getElementById("authGate");
 const appShell = document.getElementById("appShell");
@@ -31,11 +33,18 @@ async function checkSession() {
     showGate();
     return;
   }
-  if (session.user.email !== ALLOWED_EMAIL) {
-    await sb.auth.signOut();
-    showGate(`Signed in as ${session.user.email}, but this dashboard is restricted to ${ALLOWED_EMAIL}.`);
+  if (window.isAuthed && window.appAccess?.email === session.user.email.toLowerCase()) return; // token refresh
+  const { data: access, error } = await sb.rpc("my_access");
+  if (error) {
+    showGate("Couldn't check your access: " + error.message);
     return;
   }
+  if (!access?.allowed) {
+    await sb.auth.signOut();
+    showGate(`${session.user.email} hasn't been invited yet. Ask for an invite, then sign in with that same Google account.`);
+    return;
+  }
+  window.appAccess = access;
   showApp(session.user.email);
 }
 
@@ -48,6 +57,7 @@ signInBtn.addEventListener("click", async () => {
 });
 
 signOutBtn.addEventListener("click", async () => {
+  window.appAccess = null;
   await sb.auth.signOut();
   showGate();
 });

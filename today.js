@@ -973,7 +973,7 @@ async function saveTodayConsumption(patch) {
     ...patch,
     updated_at: new Date().toISOString(),
   };
-  const { data, error } = await sb.from("consumption_checkins").upsert(row, { onConflict: "log_date" }).select().single();
+  const { data, error } = await sb.from("consumption_checkins").upsert(row, { onConflict: "owner_email,log_date" }).select().single();
   if (error) { alert("Failed to save check-in: " + error.message); return; }
   todayData.consumption = (todayData.consumption || []).filter((r) => r.log_date !== todayStr).concat(data);
   renderTodayConsumption(todayStr);
