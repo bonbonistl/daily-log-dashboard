@@ -216,16 +216,24 @@ button:hover { border-color: var(--accent); }
   width: min(420px, 100vw);
   background: var(--panel);
   border-left: 1px solid var(--panel-border);
-  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.4);
+  /* No shadow while closed: the drawer parks just off the right edge and its
+     shadow used to bleed onto the page as a dark strip. Hidden once slid out. */
+  box-shadow: none;
   transform: translateX(100%);
-  transition: transform 0.25s ease;
+  visibility: hidden;
+  transition: transform 0.25s ease, visibility 0s linear 0.25s;
   z-index: 50;
   display: flex;
   flex-direction: column;
   padding: 20px;
   overflow-y: auto;
 }
-.journal-drawer.open { transform: translateX(0); }
+.journal-drawer.open {
+  transform: translateX(0);
+  visibility: visible;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
+  transition: transform 0.25s ease, visibility 0s;
+}
 
 .journal-header {
   display: flex;
