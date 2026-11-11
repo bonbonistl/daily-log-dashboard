@@ -44,7 +44,8 @@ cd frametv-relay
 - Log file: `~/Library/Logs/frametv-relay.log`
 - Turn it off: `./uninstall-autostart.sh`
 - If the log shows `Operation not permitted`, macOS is blocking background
-  access to `~/Documents`. Fix it in System Settings → Privacy & Security →
+  access to this folder (common if it's under `~/Documents` or `~/Desktop`; the
+  project lives in `~/Developer/LifeOS` to avoid that and iCloud). Fix it in System Settings → Privacy & Security →
   Full Disk Access by adding `node` (`which node`).
 - If you move this folder or upgrade Node to a different path, run
   `./install-autostart.sh` again. The LaunchAgent stores absolute paths.
