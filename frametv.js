@@ -175,7 +175,7 @@ class FrameTVClient {
     try { version = await this.getApiVersion(); } catch {}
     if (version !== "0.97") {
       throw new FrameTVUnsupportedUploadError(
-        "This TV's firmware needs a local-network relay to receive uploads — a direct browser connection can't open the raw socket its Art Mode protocol requires for newer firmware. Ask Claude to build a small local relay service if you want this to work on this TV."
+        "This TV's firmware needs a local-network relay to receive uploads — a direct browser connection can't open the raw socket its Art Mode protocol requires for newer firmware. Set a Local relay URL in the FrameTV settings and start the relay (see the \"How to start the local relay\" steps there)."
       );
     }
 
@@ -325,6 +325,7 @@ async function loadFrameTVData() {
       document.getElementById("frametvRelayUrl").value = data.relay_url || "";
       updateFrameTVTrustCertLink();
       if (data.tv_ip && data.token) connectFrameTV({ silent: true });
+      if (data.relay_url) checkFrameTVRelay();
     }
 
     frameTVLoadedOnce = true;
@@ -404,6 +405,38 @@ document.getElementById("frametvSettingsForm").addEventListener("submit", (e) =>
   e.preventDefault();
   connectFrameTV();
 });
+// Pings the relay's /health endpoint so it's obvious whether it's running
+// before trying to send. Opens the how-to when it's not reachable.
+async function checkFrameTVRelay() {
+  const el = document.getElementById("frametvRelayStatus");
+  const relayUrl = document.getElementById("frametvRelayUrl").value.trim();
+  if (!relayUrl) {
+    el.textContent = "Relay status: no Local relay URL set. Enter http://localhost:8787 above.";
+    el.style.color = "var(--danger)";
+    document.getElementById("frametvRelayHelp").open = true;
+    return false;
+  }
+  el.textContent = "Relay status: checking…";
+  el.style.color = "";
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(`${relayUrl.replace(/\/$/, "")}/health`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.ok) throw new Error(`HTTP ${res.status}`);
+    el.textContent = `Relay status: running ✓ (${relayUrl})`;
+    el.style.color = "var(--accent)";
+    return true;
+  } catch (e) {
+    el.textContent = `Relay status: not reachable at ${relayUrl}. Start it using the steps below.`;
+    el.style.color = "var(--danger)";
+    document.getElementById("frametvRelayHelp").open = true;
+    return false;
+  }
+}
+
+document.getElementById("frametvRelayCheckBtn").addEventListener("click", checkFrameTVRelay);
 document.getElementById("frametvIp").addEventListener("input", updateFrameTVTrustCertLink);
 document.getElementById("frametvPort").addEventListener("input", updateFrameTVTrustCertLink);
 
@@ -761,7 +794,8 @@ async function sendFrameTVArtViaRelay(art, matte, statusEl) {
     if (!res.ok || !json.ok) throw new Error(json.error || `Relay returned HTTP ${res.status}.`);
     statusEl.textContent = "Sent ✓ — now showing on your Frame TV.";
   } catch (e) {
-    statusEl.textContent = `Couldn't reach the local relay at ${relayUrl} — make sure it's running (npm start in frametv-relay/). ${e.message}`;
+    statusEl.textContent = `Couldn't reach the local relay at ${relayUrl} — make sure it's running (see "How to start the local relay" in the settings above). ${e.message}`;
+    const help = document.getElementById("frametvRelayHelp"); if (help) help.open = true;
   }
 }
 

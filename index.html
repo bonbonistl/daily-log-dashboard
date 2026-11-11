@@ -82,11 +82,40 @@
           <input type="url" id="frametvRelayUrl" placeholder="Local relay URL (optional), e.g. http://localhost:8787" maxlength="300" />
           <button type="submit" id="frametvConnectBtn">Save &amp; Connect</button>
         </form>
-        <p class="hint drawer-hint">
-          If sending art fails with a message about needing a local relay, your TV's firmware requires it for
-          uploads — see <code>frametv-relay/README.md</code> in the project for a one-time setup, then enter its
-          address above.
-        </p>
+        <div class="frametv-relay-status-row" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px;">
+          <button type="button" id="frametvRelayCheckBtn">Check relay</button>
+          <span id="frametvRelayStatus" class="hint">Relay status: not checked yet.</span>
+        </div>
+        <details id="frametvRelayHelp" style="margin-top:10px;">
+          <summary><strong>Sending art stopped working? How to start the local relay</strong></summary>
+          <div class="hint" style="margin-top:8px; line-height:1.55;">
+            <p>
+              Your TV's firmware only accepts new art through a small helper program (the "relay") running on a
+              computer on your home Wi-Fi. A browser can't do that part itself. Browsing art, pairing, and picking
+              art already on the TV all work without it. Only <em>Send to TV</em> needs it. If the Mac restarts
+              or the Terminal window gets closed, the relay stops, and sending fails until it's started again.
+            </p>
+            <ol style="padding-left:20px; margin:8px 0;">
+              <li>On the Mac, open <strong>Terminal</strong> (Spotlight → "Terminal").</li>
+              <li>Paste this and press Return:
+                <pre style="white-space:pre-wrap; margin:6px 0;"><code>cd ~/Documents/Justin/Health\ Coach/frametv-relay &amp;&amp; npm install &amp;&amp; npm start</code></pre>
+              </li>
+              <li>Wait for <code>FrameTV relay listening on http://localhost:8787</code>. Then <strong>leave that window open</strong>.</li>
+              <li>Make sure <strong>Local relay URL</strong> above says <code>http://localhost:8787</code>, then click <em>Save &amp; Connect</em>.</li>
+              <li>Click <em>Check relay</em>. It should say <strong>running ✓</strong>.</li>
+              <li>If this is the relay's first send to this TV, the TV will show an <strong>Allow</strong> prompt. Accept it with the remote. You only need to do this once.</li>
+            </ol>
+            <p><strong>Troubleshooting</strong></p>
+            <ul style="padding-left:20px; margin:6px 0;">
+              <li><code>command not found: npm</code>: Node.js isn't installed. Install it from nodejs.org (or <code>brew install node</code>), then try again.</li>
+              <li><code>EADDRINUSE</code>: the relay is already running somewhere. Click <em>Check relay</em>; you're probably fine.</li>
+              <li>Chrome asks to allow access to devices on your local network: click <strong>Allow</strong>. That's how the page reaches the relay.</li>
+              <li>The relay shows up but sending fails: check that the TV is on and its IP above is still right. Routers sometimes hand the TV a new address.</li>
+              <li>Using a different always-on computer (Mac mini, Raspberry Pi)? Run the same command there and use its IP instead, e.g. <code>http://192.168.1.42:8787</code>.</li>
+            </ul>
+            <p>Full details are in <code>frametv-relay/README.md</code> in the project.</p>
+          </div>
+        </details>
       </section>
 
       <section class="panel" id="frametvArtPanel">

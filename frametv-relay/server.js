@@ -260,6 +260,9 @@ function withCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  // Chrome's Private Network Access check: a public https page calling
+  // localhost sends a preflight that must be answered with this header.
+  res.setHeader("Access-Control-Allow-Private-Network", "true");
 }
 
 function sendJson(res, status, body) {
