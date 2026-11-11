@@ -31,6 +31,24 @@ you're running this on a different machine on your network — like a Mac
 mini or Raspberry Pi that stays on — use that machine's IP instead, e.g.
 `http://192.168.1.42:8787`).
 
+## Auto-start at login (recommended)
+
+So you don't have to keep a Terminal window open, install it as a macOS
+LaunchAgent. It starts when you log in and restarts if it crashes:
+
+```bash
+cd frametv-relay
+./install-autostart.sh
+```
+
+- Log file: `~/Library/Logs/frametv-relay.log`
+- Turn it off: `./uninstall-autostart.sh`
+- If the log shows `Operation not permitted`, macOS is blocking background
+  access to `~/Documents`. Fix it in System Settings → Privacy & Security →
+  Full Disk Access by adding `node` (`which node`).
+- If you move this folder or upgrade Node to a different path, run
+  `./install-autostart.sh` again. The LaunchAgent stores absolute paths.
+
 ## First-time pairing
 
 The first time you hit "Send to TV" after setting the relay URL, the TV will

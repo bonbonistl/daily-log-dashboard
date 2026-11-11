@@ -92,9 +92,15 @@
             <p>
               Your TV's firmware only accepts new art through a small helper program (the "relay") running on a
               computer on your home Wi-Fi. A browser can't do that part itself. Browsing art, pairing, and picking
-              art already on the TV all work without it. Only <em>Send to TV</em> needs it. If the Mac restarts
-              or the Terminal window gets closed, the relay stops, and sending fails until it's started again.
+              art already on the TV all work without it. Only <em>Send to TV</em> needs it.
             </p>
+            <p>
+              <strong>It's set to start automatically</strong> when you log in to the Mac, and to restart itself if it crashes.
+              If <em>Check relay</em> says it's not reachable, the Mac might be off or asleep, or auto-start might have been
+              removed (for example on a new Mac). To turn auto-start back on, run this once in Terminal:
+            </p>
+            <pre style="white-space:pre-wrap; margin:6px 0;"><code>cd ~/Documents/Justin/Health\ Coach/frametv-relay &amp;&amp; ./install-autostart.sh</code></pre>
+            <p>It should print <code>✓ FrameTV relay is running and will start automatically at login.</code> To run it just this once instead, without auto-start:</p>
             <ol style="padding-left:20px; margin:8px 0;">
               <li>On the Mac, open <strong>Terminal</strong> (Spotlight → "Terminal").</li>
               <li>Paste this and press Return:
@@ -109,6 +115,8 @@
             <ul style="padding-left:20px; margin:6px 0;">
               <li><code>command not found: npm</code>: Node.js isn't installed. Install it from nodejs.org (or <code>brew install node</code>), then try again.</li>
               <li><code>EADDRINUSE</code>: the relay is already running somewhere. Click <em>Check relay</em>; you're probably fine.</li>
+              <li>Auto-start installed but not reachable: look at the log, <code>~/Library/Logs/frametv-relay.log</code>. If it says <code>Operation not permitted</code>, go to System Settings → Privacy &amp; Security → Full Disk Access and add <code>node</code> (<code>/opt/homebrew/bin/node</code>).</li>
+              <li>Turn auto-start off: <code>./uninstall-autostart.sh</code> in the same folder.</li>
               <li>Chrome asks to allow access to devices on your local network: click <strong>Allow</strong>. That's how the page reaches the relay.</li>
               <li>The relay shows up but sending fails: check that the TV is on and its IP above is still right. Routers sometimes hand the TV a new address.</li>
               <li>Using a different always-on computer (Mac mini, Raspberry Pi)? Run the same command there and use its IP instead, e.g. <code>http://192.168.1.42:8787</code>.</li>
