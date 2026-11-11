@@ -304,6 +304,9 @@ let frameTVSettingsRow = null; // { id, tv_ip, tv_port, token }
 let frameTVArtResults = [];
 let frameTVCategoryFilter = new Set(); // categories currently checked in the sidebar
 let frameTVKnownCategories = new Set(); // categories seen so far this search, so new ones default to checked without re-checking ones the user unchecked
+// art_key -> { ...latest frame_tv_sent_art row, count } so browse results can
+// be marked/hidden and the drawer can say when a piece was last sent.
+let frameTVSentByKey = new Map();
 let frameTVPaging = { query: null, articPage: 0, clevelandSkip: 0, metIds: [], metOffset: 0 };
 let frameTVMatteOptions = [
   { matte_id: "none", matte_type: "None" },
@@ -328,6 +331,7 @@ async function loadFrameTVData() {
       if (data.relay_url) checkFrameTVRelay();
     }
 
+    await loadFrameTVSentHistory();
     frameTVLoadedOnce = true;
   }
 
@@ -554,6 +558,98 @@ function updateFrameTVArtStatusCount(count) {
   document.getElementById(id).addEventListener("change", () => loadFrameTVArt());
 });
 
+// ---------- sent-to-TV history ----------
+function frameTVFormatSentDate(iso) {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+async function loadFrameTVSentHistory() {
+  const { data, error } = await sb.from("frame_tv_sent_art").select("*").order("sent_at", { ascending: false });
+  if (error) return;
+  frameTVSentByKey = new Map();
+  (data || []).forEach((row) => {
+    const existing = frameTVSentByKey.get(row.art_key);
+    if (existing) existing.count += 1; // rows are newest-first, so the first one seen is the latest send
+    else frameTVSentByKey.set(row.art_key, { ...row, count: 1 });
+  });
+  renderFrameTVSentHistory();
+}
+
+async function recordFrameTVSent(art, matte) {
+  const { data, error } = await sb.from("frame_tv_sent_art").insert({
+    art_key: art.key,
+    title: art.title,
+    artist: art.artist,
+    source: art.source,
+    thumb_url: art.thumbUrl,
+    image_url: art.imageUrl,
+    source_url: art.sourceUrl,
+    matte,
+  }).select().maybeSingle();
+  if (error || !data) return;
+  const prev = frameTVSentByKey.get(art.key);
+  frameTVSentByKey.delete(art.key); // re-insert so it moves to the front (newest first)
+  frameTVSentByKey = new Map([[art.key, { ...data, count: (prev ? prev.count : 0) + 1 }], ...frameTVSentByKey]);
+  renderFrameTVSentHistory();
+  // Don't re-render the browse grid here: that would yank the card out from
+  // under the open drawer when "hide sent" is on. It drops off on the next
+  // filter change or search.
+  const card = document.querySelector(`#frametvArtGrid .art-card[data-art-key="${CSS.escape(art.key)}"]`);
+  if (card) addFrameTVSentBadge(card, art.key);
+}
+
+function addFrameTVSentBadge(card, key) {
+  if (!frameTVSentByKey.has(key) || card.querySelector(".art-sent-badge")) return;
+  const badge = document.createElement("span");
+  badge.className = "art-fit-badge art-sent-badge";
+  badge.style.left = "auto";
+  badge.style.right = "8px";
+  badge.style.background = "#555";
+  badge.textContent = "Sent";
+  badge.title = `Sent ${frameTVFormatSentDate(frameTVSentByKey.get(key).sent_at)}`;
+  card.appendChild(badge);
+}
+
+function frameTVArtFromSentRow(row) {
+  return {
+    key: row.art_key,
+    title: row.title || "Untitled",
+    artist: row.artist || "Unknown artist",
+    source: row.source || "",
+    thumbUrl: row.thumb_url,
+    imageUrl: row.image_url,
+    sourceUrl: row.source_url,
+  };
+}
+
+function renderFrameTVSentHistory() {
+  const rows = [...frameTVSentByKey.values()];
+  document.getElementById("frametvSentCount").textContent = rows.length ? `(${rows.length})` : "";
+  document.getElementById("frametvSentEmpty").classList.toggle("hidden", rows.length > 0);
+  const grid = document.getElementById("frametvSentGrid");
+  grid.innerHTML = rows.map((r) => `
+    <div class="art-card" data-art-key="${escapeHtml(r.art_key)}">
+      <img src="${escapeHtml(r.thumb_url || "")}" alt="${escapeHtml(r.title || "")}" loading="lazy" />
+      <div class="art-card-meta">
+        <div class="art-card-title">${escapeHtml(r.title || "Untitled")}</div>
+        <div class="art-card-artist">${escapeHtml(r.artist || "")}</div>
+        <div class="art-card-source">Sent ${escapeHtml(frameTVFormatSentDate(r.sent_at))}${r.count > 1 ? ` · ${r.count}×` : ""}</div>
+      </div>
+    </div>
+  `).join("");
+  grid.querySelectorAll(".art-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      const row = frameTVSentByKey.get(card.dataset.artKey);
+      if (row) openFrameTVDrawer(frameTVArtFromSentRow(row));
+    });
+  });
+}
+
+document.getElementById("frametvHideSentFilter").addEventListener("change", () => {
+  renderFrameTVArtGrid();
+  updateFrameTVArtStatusCount(getFilteredFrameTVResults().length);
+});
+
 document.getElementById("frametvFitOnlyFilter").addEventListener("change", () => {
   renderFrameTVArtGrid();
   updateFrameTVArtStatusCount(getFilteredFrameTVResults().length);
@@ -578,8 +674,10 @@ const FRAMETV_FIT_RANK = { great: 0, good: 1 };
 
 function getFilteredFrameTVResults() {
   const fitOnly = document.getElementById("frametvFitOnlyFilter").checked;
+  const hideSent = document.getElementById("frametvHideSentFilter").checked;
   const filtered = frameTVArtResults.filter((a) => {
     if (!frameTVCategoryFilter.has(a.category)) return false;
+    if (hideSent && frameTVSentByKey.has(a.key)) return false;
     // a.fitTier is undefined until the image has loaded and its aspect
     // ratio is measured — leave those in so the grid isn't empty while
     // images are still loading; only exclude ones confirmed to be a poor
@@ -668,6 +766,7 @@ function renderFrameTVArtGrid() {
 
   gridEl.querySelectorAll(".art-card").forEach((card) => {
     card.addEventListener("click", () => openFrameTVDrawer(card.dataset.artKey));
+    addFrameTVSentBadge(card, card.dataset.artKey);
     const img = card.querySelector("img");
 
     img.addEventListener("error", () => {
@@ -700,9 +799,14 @@ function renderFrameTVArtGrid() {
 }
 
 // ---------- artwork drawer ----------
-function openFrameTVDrawer(key) {
-  const art = frameTVArtResults.find((a) => a.key === key);
+// Accepts a browse-result key, or an art object directly (from the Sent panel).
+function openFrameTVDrawer(keyOrArt) {
+  const art = typeof keyOrArt === "string" ? frameTVArtResults.find((a) => a.key === keyOrArt) : keyOrArt;
   if (!art) return;
+  const sent = frameTVSentByKey.get(art.key);
+  const sentNote = sent
+    ? `<p class="hint" style="color: var(--danger); font-weight: 600;">Already sent to the TV on ${escapeHtml(frameTVFormatSentDate(sent.sent_at))}${sent.count > 1 ? ` (${sent.count} times)` : ""}.</p>`
+    : "";
 
   document.getElementById("frametvDrawerTitle").textContent = art.title;
 
@@ -716,10 +820,11 @@ function openFrameTVDrawer(key) {
     <img src="${escapeHtml(art.imageUrl)}" alt="${escapeHtml(art.title)}" class="art-drawer-preview" />
     <p class="hint">${escapeHtml(art.artist)} — ${escapeHtml(art.source)}</p>
     <p><a href="${escapeHtml(art.sourceUrl)}" target="_blank" rel="noopener noreferrer">View source ↗</a></p>
+    ${sentNote}
     <label>Matte
       <select id="frametvMatteSelect">${matteOptionsHtml}</select>
     </label>
-    <button type="button" id="frametvSendBtn">Send to TV</button>
+    <button type="button" id="frametvSendBtn">${sent ? "Send again" : "Send to TV"}</button>
     <p id="frametvSendStatus" class="hint"></p>
   `;
 
@@ -793,6 +898,7 @@ async function sendFrameTVArtViaRelay(art, matte, statusEl) {
     const json = await res.json().catch(() => ({}));
     if (!res.ok || !json.ok) throw new Error(json.error || `Relay returned HTTP ${res.status}.`);
     statusEl.textContent = "Sent ✓ — now showing on your Frame TV.";
+    await recordFrameTVSent(art, matte);
   } catch (e) {
     statusEl.textContent = `Couldn't reach the local relay at ${relayUrl} — make sure it's running (see "How to start the local relay" in the settings above). ${e.message}`;
     const help = document.getElementById("frametvRelayHelp"); if (help) help.open = true;
@@ -837,6 +943,7 @@ async function sendFrameTVArt(art) {
     await frameTVClient.setArtMode(true);
 
     statusEl.textContent = "Sent ✓ — now showing on your Frame TV.";
+    await recordFrameTVSent(art, matte);
   } catch (e) {
     statusEl.textContent = `Failed: ${e.message}`;
   } finally {
