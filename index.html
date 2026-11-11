@@ -32,7 +32,6 @@
       <button class="tab-btn active" id="todayTabBtn" data-tab="today">Today</button>
       <button class="tab-btn" id="healthTabBtn" data-tab="health">Health</button>
       <button class="tab-btn" id="spiritualTabBtn" data-tab="spiritual">Habits</button>
-      <button class="tab-btn" id="groceriesTabBtn" data-tab="groceries">Groceries</button>
       <button class="tab-btn" id="connectionsTabBtn" data-tab="connections">Connections</button>
       <button class="tab-btn" id="paperTabBtn" data-tab="paper">Paper</button>
       <button class="tab-btn" id="homeTabBtn" data-tab="home">House</button>
@@ -54,7 +53,7 @@
     </div>
     <div class="user-info">
       <span id="userEmailLabel" class="updated-at"></span>
-      <button id="settingsBtn" title="Personal settings">⚙︎ Settings</button>
+      <button id="settingsBtn" title="Personal settings" aria-label="Settings">⚙︎<span class="btn-label"> Settings</span></button>
       <button id="signOutBtn">Sign out</button>
     </div>
   </header>
@@ -231,6 +230,13 @@
             </div>
             <div id="todayHappenedList" class="disruption-today-list"></div>
           </div>
+        </div>
+
+        <div class="panel" id="todayConsumptionPanel">
+          <div class="panel-heading-row">
+            <h2>Consumption check-in <span class="hint">did I overdo it today?</span></h2>
+          </div>
+          <div id="todayConsumption"></div>
         </div>
       </section>
 
@@ -437,52 +443,6 @@
       <h2>Disruption Day Detail <span class="hint">practices missed and food/drink that day</span></h2>
       <div id="insightsDetailList" class="insights-detail-list"></div>
     </section>
-  </main>
-
-  <main id="groceriesApp" class="tab-content hidden">
-    <div id="groceriesLoading">Loading data…</div>
-
-    <div class="subtabs">
-      <button class="subtab-btn active" id="inventorySubtabBtn">Inventory</button>
-      <button class="subtab-btn" id="cartSubtabBtn">Cart</button>
-    </div>
-
-    <div id="groceriesInventory" class="subtab-content">
-      <section class="panel hidden" id="inventoryPanel">
-        <h2>Inventory <span class="hint">what's actually on hand right now</span></h2>
-        <form id="addInventoryForm" class="plan-add-form">
-          <input type="text" id="newInventoryName" placeholder="Item name" maxlength="200" required />
-          <select id="newInventoryFunction"></select>
-          <input type="number" id="newInventoryQty" placeholder="qty" min="1" step="1" value="1" required />
-          <button type="submit">Add</button>
-        </form>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Quantity</th>
-              <th>Function</th>
-            </tr>
-          </thead>
-          <tbody id="inventoryTableBody"></tbody>
-        </table>
-      </section>
-    </div>
-
-    <div id="groceriesCart" class="subtab-content hidden">
-      <section class="panel hidden" id="groceriesPanel">
-        <div class="panel-heading-row">
-          <h2 id="groceriesHeading">Cart</h2>
-          <div class="panel-heading-actions">
-            <span id="groceriesUpdatedAt" class="updated-at"></span>
-            <button id="markReceivedBtn" class="hidden">Mark as Received</button>
-          </div>
-        </div>
-        <p class="hint drawer-hint">Shows what's in the Instacart cart as of the last sync — ask Claude to "sync my cart" to pull the latest. Once the order shows up, mark it received to move everything into Inventory.</p>
-        <div id="groceriesCards" class="cards"></div>
-        <div id="groceriesGroups" class="checkin-groups"></div>
-      </section>
-    </div>
   </main>
 
   <main id="connectionsApp" class="tab-content hidden">
@@ -911,7 +871,6 @@
   <script src="fasting.js"></script>
   <script src="food_plan.js"></script>
   <script src="insights.js"></script>
-  <script src="groceries.js"></script>
   <script src="table-tools.js"></script>
   <script src="businesses.js"></script>
   <script src="crm.js"></script>

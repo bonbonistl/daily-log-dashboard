@@ -476,24 +476,6 @@ button:hover { border-color: var(--accent); }
 }
 .plan-item-remove:hover { color: var(--danger); }
 
-/* ---------- groceries ---------- */
-.grocery-function-select { flex-shrink: 0; font-size: 12px; }
-
-.qty-stepper {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.qty-btn {
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  line-height: 1;
-  font-size: 14px;
-}
-.qty-value { min-width: 16px; text-align: center; font-size: 13px; }
-
 .plan-add-form {
   display: flex;
   flex-wrap: wrap;
@@ -1867,3 +1849,122 @@ button:hover { border-color: var(--accent); }
 }
 @media (hover: none) { .job-rename-btn { opacity: 1; } }
 @media (max-width: 700px) { .table-sort-controls { margin-left: 0; } }
+
+/* ---------- consumption check-in (Today) ---------- */
+.consumption-levels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.consumption-level {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg);
+  text-align: center;
+}
+.consumption-emoji { font-size: 22px; line-height: 1; }
+.consumption-level.active { color: var(--text); }
+.consumption-level.active.level-mindful { border-color: var(--accent); background: rgba(15, 118, 110, 0.1); }
+.consumption-level.active.level-a_bit_much { border-color: var(--accent2); background: rgba(180, 83, 9, 0.1); }
+.consumption-level.active.level-overdid_it { border-color: var(--danger); background: rgba(220, 38, 38, 0.08); }
+.consumption-details { margin-top: 14px; }
+.consumption-sub { font-size: 13px; margin-bottom: 8px; }
+.consumption-sub .hint { font-size: 12px; color: var(--muted); }
+.consumption-areas { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.consumption-area {
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  background: none;
+}
+.consumption-area.active {
+  color: var(--accent2);
+  border-color: rgba(180, 83, 9, 0.5);
+  background: rgba(180, 83, 9, 0.1);
+}
+.disruption-form-row .consumption-clear {
+  background: none;
+  border: 1px solid var(--panel-border);
+  color: var(--muted);
+  font-weight: 600;
+}
+.disruption-form-row .consumption-clear:hover { color: var(--danger); border-color: var(--danger); }
+.consumption-week {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--panel-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.consumption-days { display: flex; gap: 10px; }
+.consumption-day { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.consumption-day-name { font-size: 11px; color: var(--muted); }
+.consumption-day.is-today .consumption-day-name { color: var(--text); font-weight: 700; }
+.consumption-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px dashed var(--panel-border);
+}
+.consumption-dot.level-mindful { background: var(--accent); border: none; }
+.consumption-dot.level-a_bit_much { background: var(--accent2); border: none; }
+.consumption-dot.level-overdid_it { background: var(--danger); border: none; }
+.consumption-summary { font-size: 12px; color: var(--muted); }
+
+/* ---------- header / nav ---------- */
+/* Grid so the tab strip gets its own full-width row and scrolls sideways
+   instead of wrapping or pushing past the edge. */
+header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+header h1 { grid-row: 1; grid-column: 1; }
+header .user-info { grid-row: 1; grid-column: 2; }
+header .tabs { grid-row: 2; grid-column: 1 / -1; }
+header .controls { grid-row: 3; grid-column: 1 / -1; flex-wrap: wrap; }
+.tabs, .subtabs {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.tabs::-webkit-scrollbar, .subtabs::-webkit-scrollbar { display: none; }
+.tab-btn, .subtab-btn { flex-shrink: 0; white-space: nowrap; }
+
+/* ---------- phones ---------- */
+@media (max-width: 640px) {
+  body { padding: 12px; }
+  header { margin-bottom: 16px; gap: 10px; }
+  #userEmailLabel { display: none; }
+  #settingsBtn .btn-label { display: none; }
+  #settingsBtn { font-size: 16px; padding: 4px 10px; line-height: 1.2; }
+  /* Tabs bleed to the screen edges so it's obvious the strip scrolls. */
+  header .tabs { margin: 0 -12px; padding: 0 12px; gap: 6px; }
+  .tab-btn { padding: 8px 14px; }
+  .subtabs { margin-bottom: 14px; }
+  .panel { padding: 14px; margin-bottom: 14px; }
+  .today-grid { gap: 0; }
+  .today-greeting { font-size: 20px; }
+  .panel-heading-row { flex-wrap: wrap; gap: 6px; }
+  .panel h2 { flex-wrap: wrap; }
+  .cards { gap: 10px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+  /* 16px stops iOS Safari from zooming in when a field is focused. */
+  input, select, textarea { font-size: 16px !important; }
+  .data-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .consumption-level { font-size: 12px; padding: 10px 4px; }
+  .consumption-days { gap: 8px; }
+  .disruption-form-row input { min-width: 0; }
+}

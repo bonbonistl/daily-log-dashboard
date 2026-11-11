@@ -53,6 +53,7 @@ async function loadTodayData() {
     sb.from("prayer_requests").select("*, people(name)").is("answered_at", null).order("pray_on", { ascending: true }),
     // Every cause ever logged (not just today's) so a recurring one like "Sabbath" is a one-click chip.
     sb.from("rule_of_life_disruptions").select("id, log_date, cause").order("id", { ascending: true }),
+    sb.from("consumption_checkins").select("*").gte("log_date", toLocalDateStr(consumptionWindowStart())),
   ]);
 
   let results;
@@ -70,7 +71,7 @@ async function loadTodayData() {
     return;
   }
 
-  const [practicesRes, habitLogRes, peopleRes, openingsRes, businessesRes, logRes, planRes, prayersRes, disruptionsRes] = results;
+  const [practicesRes, habitLogRes, peopleRes, openingsRes, businessesRes, logRes, planRes, prayersRes, disruptionsRes, consumptionRes] = results;
   todayData = {
     practices: practicesRes.data,
     habitLog: habitLogRes.data,
@@ -81,6 +82,7 @@ async function loadTodayData() {
     planRows: planRes.data,
     prayers: prayersRes.data,
     disruptions: disruptionsRes.data,
+    consumption: consumptionRes.data,
   };
   todayLoadedOnce = true;
   statusEl.classList.add("hidden");
@@ -95,6 +97,7 @@ function renderTodayDashboard() {
   renderTodayGreeting(now);
   renderTodayHabits(now, todayStr);
   renderTodayHappened(todayStr);
+  renderTodayConsumption(todayStr);
   renderTodayBirthdays(now);
   renderTodayPrayers(now);
   renderTodayJobs(now);
@@ -873,3 +876,113 @@ document.getElementById("todayHappenedLogBtn").addEventListener("click", () => l
 document.getElementById("todayHappenedCause").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); logTodayHappened(); }
 });
+
+// ---------- consumption check-in (consumption_checkins) ----------
+// One row per day: an honest "did I overdo it?" plus optional areas and a note.
+// The 7-day strip is there to notice patterns, not to keep score.
+const CONSUMPTION_LEVELS = [
+  { key: "mindful", emoji: "🙂", label: "Kept it in check" },
+  { key: "a_bit_much", emoji: "😬", label: "A bit much" },
+  { key: "overdid_it", emoji: "🫠", label: "Overdid it" },
+];
+const CONSUMPTION_AREAS = ["Food", "Sweets & snacks", "Drinks", "Screens", "Spending"];
+const CONSUMPTION_DAYS = 7;
+
+function consumptionWindowStart() {
+  const d = new Date();
+  d.setDate(d.getDate() - (CONSUMPTION_DAYS - 1));
+  return d;
+}
+
+function renderTodayConsumption(todayStr) {
+  const rows = todayData.consumption || [];
+  const today = rows.find((r) => r.log_date === todayStr);
+  const el = document.getElementById("todayConsumption");
+
+  const levelBtns = CONSUMPTION_LEVELS.map((l) => `
+    <button type="button" class="consumption-level${today?.level === l.key ? " active level-" + l.key : ""}" data-level="${l.key}" aria-pressed="${today?.level === l.key}">
+      <span class="consumption-emoji">${l.emoji}</span><span>${l.label}</span>
+    </button>`).join("");
+
+  let details = "";
+  if (today) {
+    const areas = new Set(today.areas || []);
+    details = `
+      <div class="consumption-details">
+        <div class="consumption-sub">${today.level === "mindful" ? "Anything you had to work at?" : "Where did it show up?"} <span class="hint">optional</span></div>
+        <div class="consumption-areas">
+          ${CONSUMPTION_AREAS.map((a) => `<button type="button" class="consumption-area${areas.has(a) ? " active" : ""}" data-area="${escHtml(a)}">${escHtml(a)}</button>`).join("")}
+        </div>
+        <div class="disruption-form-row">
+          <input type="text" id="todayConsumptionNote" placeholder="What was going on? (tired, stressed, celebrating…)" maxlength="300" value="${escHtml(today.note || "")}" aria-label="Consumption note" />
+          <button type="button" id="todayConsumptionClear" class="consumption-clear">Clear</button>
+        </div>
+      </div>`;
+  }
+
+  const days = [];
+  for (let i = CONSUMPTION_DAYS - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const ds = toLocalDateStr(d);
+    const row = rows.find((r) => r.log_date === ds);
+    const lvl = CONSUMPTION_LEVELS.find((l) => l.key === row?.level);
+    days.push(`<div class="consumption-day${ds === todayStr ? " is-today" : ""}" title="${escHtml(d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }))}: ${lvl ? lvl.label : "not logged"}${row?.note ? " — " + escHtml(row.note) : ""}">
+      <span class="consumption-dot${row ? " level-" + row.level : ""}"></span>
+      <span class="consumption-day-name">${d.toLocaleDateString(undefined, { weekday: "narrow" })}</span>
+    </div>`);
+  }
+  const logged = rows.filter((r) => r.log_date >= toLocalDateStr(consumptionWindowStart()));
+  const inCheck = logged.filter((r) => r.level === "mindful").length;
+  const summary = logged.length ? `${inCheck} of ${logged.length} logged day${logged.length === 1 ? "" : "s"} in check this week` : "Nothing logged this week yet";
+
+  el.innerHTML = `
+    <div class="consumption-levels">${levelBtns}</div>
+    ${details}
+    <div class="consumption-week">
+      <div class="consumption-days">${days.join("")}</div>
+      <span class="consumption-summary">${summary}</span>
+    </div>`;
+
+  el.querySelectorAll(".consumption-level").forEach((btn) => {
+    btn.addEventListener("click", () => saveTodayConsumption({ level: btn.dataset.level }));
+  });
+  el.querySelectorAll(".consumption-area").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const areas = new Set(today.areas || []);
+      areas.has(btn.dataset.area) ? areas.delete(btn.dataset.area) : areas.add(btn.dataset.area);
+      saveTodayConsumption({ areas: CONSUMPTION_AREAS.filter((a) => areas.has(a)) });
+    });
+  });
+  const noteEl = document.getElementById("todayConsumptionNote");
+  if (noteEl) {
+    noteEl.addEventListener("change", () => saveTodayConsumption({ note: noteEl.value.trim() || null }));
+    noteEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); noteEl.blur(); } });
+  }
+  document.getElementById("todayConsumptionClear")?.addEventListener("click", clearTodayConsumption);
+}
+
+async function saveTodayConsumption(patch) {
+  const todayStr = todayLocalStr();
+  const existing = (todayData.consumption || []).find((r) => r.log_date === todayStr);
+  const row = {
+    log_date: todayStr,
+    level: existing?.level || "mindful",
+    areas: existing?.areas || [],
+    note: existing?.note ?? null,
+    ...patch,
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await sb.from("consumption_checkins").upsert(row, { onConflict: "log_date" }).select().single();
+  if (error) { alert("Failed to save check-in: " + error.message); return; }
+  todayData.consumption = (todayData.consumption || []).filter((r) => r.log_date !== todayStr).concat(data);
+  renderTodayConsumption(todayStr);
+}
+
+async function clearTodayConsumption() {
+  const todayStr = todayLocalStr();
+  const { error } = await sb.from("consumption_checkins").delete().eq("log_date", todayStr);
+  if (error) { alert("Failed to clear: " + error.message); return; }
+  todayData.consumption = (todayData.consumption || []).filter((r) => r.log_date !== todayStr);
+  renderTodayConsumption(todayStr);
+}

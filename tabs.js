@@ -5,7 +5,6 @@ const TOP_TABS = [
   { key: "today", btnId: "todayTabBtn", contentId: "todayApp" },
   { key: "health", btnId: "healthTabBtn", contentId: "app" },
   { key: "spiritual", btnId: "spiritualTabBtn", contentId: "spiritualApp" },
-  { key: "groceries", btnId: "groceriesTabBtn", contentId: "groceriesApp" },
   { key: "connections", btnId: "connectionsTabBtn", contentId: "connectionsApp" },
   { key: "paper", btnId: "paperTabBtn", contentId: "paperApp" },
   { key: "home", btnId: "homeTabBtn", contentId: "homeApp" },
@@ -13,14 +12,12 @@ const TOP_TABS = [
 
 let homeLoaded = false;
 let spiritualLoaded = false;
-let groceriesLoaded = false;
 let connectionsLoaded = false;
 let paperLoaded = false;
 
 // Which subtab is current within a top tab that has subtabs — tracked so the
-// hash can be rebuilt (e.g. "#groceries/inventory") whenever either level changes.
+// hash can be rebuilt (e.g. "#health/plan") whenever either level changes.
 let currentHealthSubtab = "overview";
-let currentGroceriesSubtab = "inventory";
 let currentHomeSubtab = "frametv";
 let currentConnectionsSubtab = "businesses";
 
@@ -40,10 +37,6 @@ function activateTab(key) {
   if (key === "spiritual" && !spiritualLoaded) {
     spiritualLoaded = true;
     loadSpiritualData();
-  }
-  if (key === "groceries" && !groceriesLoaded) {
-    groceriesLoaded = true;
-    loadGroceriesData();
   }
   if (key === "connections" && !connectionsLoaded) {
     connectionsLoaded = true;
@@ -81,25 +74,6 @@ function activateHealthSubtab(key) {
 
 HEALTH_SUBTABS.forEach((t) => {
   document.getElementById(t.btnId).addEventListener("click", () => activateHealthSubtab(t.key));
-});
-
-// ---------- groceries sub-tabs ----------
-const GROCERIES_SUBTABS = [
-  { key: "inventory", btnId: "inventorySubtabBtn", contentId: "groceriesInventory" },
-  { key: "cart", btnId: "cartSubtabBtn", contentId: "groceriesCart" },
-];
-
-function activateGroceriesSubtab(key) {
-  GROCERIES_SUBTABS.forEach((t) => {
-    document.getElementById(t.btnId).classList.toggle("active", t.key === key);
-    document.getElementById(t.contentId).classList.toggle("hidden", t.key !== key);
-  });
-  currentGroceriesSubtab = key;
-  updateUrlHash();
-}
-
-GROCERIES_SUBTABS.forEach((t) => {
-  document.getElementById(t.btnId).addEventListener("click", () => activateGroceriesSubtab(t.key));
 });
 
 // ---------- connections sub-tabs ----------
@@ -148,7 +122,6 @@ function updateUrlHash() {
   if (!activeTop) return;
   const sub =
     activeTop.key === "health" ? currentHealthSubtab :
-    activeTop.key === "groceries" ? currentGroceriesSubtab :
     activeTop.key === "home" ? currentHomeSubtab :
     activeTop.key === "connections" ? currentConnectionsSubtab :
     null;
@@ -172,9 +145,6 @@ function applyRouteFromHash() {
   if (validTop === "health") {
     const validSub = HEALTH_SUBTABS.some((t) => t.key === subKey) ? subKey : "overview";
     activateHealthSubtab(validSub);
-  } else if (validTop === "groceries") {
-    const validSub = GROCERIES_SUBTABS.some((t) => t.key === subKey) ? subKey : "inventory";
-    activateGroceriesSubtab(validSub);
   } else if (validTop === "home") {
     const validSub = HOME_SUBTABS.some((t) => t.key === subKey) ? subKey : "frametv";
     activateHomeSubtab(validSub);
