@@ -22,6 +22,48 @@ const WebSocket = require("ws");
 
 const PORT = process.env.PORT || 8787;
 const TOKENS_FILE = path.join(__dirname, "tokens.json");
+
+// ---------- access rules ----------
+// Only this Mac can reach the relay (it listens on loopback, not the Wi-Fi),
+// and only the LifeOS web app may call it from a browser — so other websites
+// you visit can't drive your TV or use this Mac to fetch things for them.
+// Set RELAY_LISTEN_HOST=0.0.0.0 only if the relay runs on a different machine
+// than the browser (see README).
+const LISTEN_HOSTS = process.env.RELAY_LISTEN_HOST ? [process.env.RELAY_LISTEN_HOST] : ["127.0.0.1", "::1"];
+const APP_ORIGIN = "https://bonbonistl.github.io";
+const EXTRA_ORIGINS = (process.env.RELAY_ALLOWED_ORIGINS || "")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // not a browser page (e.g. curl on this Mac)
+  if (origin === APP_ORIGIN || EXTRA_ORIGINS.includes(origin)) return true;
+  // Local previews of the app on this Mac.
+  return /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+}
+
+// The TV must be on the home network.
+function isPrivateIPv4(ip) {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(ip));
+  if (!m) return false;
+  const [a, b] = m.slice(1).map(Number);
+  if (m.slice(1).some((n) => Number(n) > 255)) return false;
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+
+// Art comes from public https museum sites, never from this Mac or the home network.
+function isPublicHttpsUrl(raw) {
+  let u;
+  try { u = new URL(String(raw)); } catch { return false; }
+  if (u.protocol !== "https:") return false;
+  const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return false;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+    const [a, b] = host.split(".").map(Number);
+    if (a === 127 || a === 0 || a === 10 || (a === 169 && b === 254) || isPrivateIPv4(host)) return false;
+  }
+  if (host.includes(":")) return false; // raw IPv6 literals aren't needed
+  return true;
+}
 const ART_APP = "com.samsung.art-app";
 const CLIENT_NAME = "LifeOS";
 
@@ -256,8 +298,11 @@ class SamsungArtClient {
 }
 
 // ---------- HTTP server ----------
-function withCors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+function withCors(req, res) {
+  const origin = req.headers.origin;
+  if (!origin || !isAllowedOrigin(origin)) return;
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   // Chrome's Private Network Access check: a public https page calling
@@ -265,8 +310,8 @@ function withCors(res) {
   res.setHeader("Access-Control-Allow-Private-Network", "true");
 }
 
-function sendJson(res, status, body) {
-  withCors(res);
+function sendJson(req, res, status, body) {
+  withCors(req, res);
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(body));
 }
@@ -277,26 +322,50 @@ async function readJsonBody(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
-const server = http.createServer(async (req, res) => {
-  if (req.method === "OPTIONS") { withCors(res); res.writeHead(204); res.end(); return; }
+async function handleRequest(req, res) {
+  // Refuse other websites outright. Without this, a page could still trigger a
+  // send with a "simple" request even though the browser hides the response.
+  if (!isAllowedOrigin(req.headers.origin)) {
+    console.warn(`[relay] blocked request from origin ${req.headers.origin}`);
+    sendJson(req, res, 403, { ok: false, error: "This site isn't allowed to use the relay." });
+    return;
+  }
+
+  if (req.method === "OPTIONS") { withCors(req, res); res.writeHead(204); res.end(); return; }
 
   if (req.method === "GET" && req.url === "/health") {
-    sendJson(res, 200, { ok: true });
+    sendJson(req, res, 200, { ok: true });
     return;
   }
 
   if (req.method === "POST" && req.url === "/send") {
+    if (!String(req.headers["content-type"] || "").includes("application/json")) {
+      sendJson(req, res, 415, { ok: false, error: "Expected a JSON request." });
+      return;
+    }
     let body;
     try {
       body = await readJsonBody(req);
     } catch {
-      sendJson(res, 400, { ok: false, error: "Invalid request body." });
+      sendJson(req, res, 400, { ok: false, error: "Invalid request body." });
       return;
     }
 
     const { tvIp, tvPort, imageUrl, matte } = body;
     if (!tvIp || !imageUrl) {
-      sendJson(res, 400, { ok: false, error: "tvIp and imageUrl are required." });
+      sendJson(req, res, 400, { ok: false, error: "tvIp and imageUrl are required." });
+      return;
+    }
+    if (!isPrivateIPv4(tvIp)) {
+      sendJson(req, res, 400, { ok: false, error: "The TV address must be a home-network IP like 192.168.1.20." });
+      return;
+    }
+    if (tvPort != null && tvPort !== "" && !/^\d{1,5}$/.test(String(tvPort))) {
+      sendJson(req, res, 400, { ok: false, error: "Invalid TV port." });
+      return;
+    }
+    if (!isPublicHttpsUrl(imageUrl)) {
+      sendJson(req, res, 400, { ok: false, error: "The image must be a public https:// address." });
       return;
     }
 
@@ -319,20 +388,37 @@ const server = http.createServer(async (req, res) => {
       await client.selectImage(contentId);
       await client.setArtMode(true);
 
-      sendJson(res, 200, { ok: true, contentId });
+      sendJson(req, res, 200, { ok: true, contentId });
     } catch (err) {
       console.error("[relay] send failed:", err.message);
-      sendJson(res, 502, { ok: false, error: err.message });
+      sendJson(req, res, 502, { ok: false, error: err.message });
     } finally {
       client.disconnect();
     }
     return;
   }
 
-  sendJson(res, 404, { ok: false, error: "Not found." });
-});
+  sendJson(req, res, 404, { ok: false, error: "Not found." });
+}
 
-server.listen(PORT, () => {
-  console.log(`FrameTV relay listening on http://localhost:${PORT}`);
-  console.log(`Point the LifeOS House > FrameTV settings' "Local relay URL" field at this address.`);
-});
+// Listen on this Mac's loopback addresses only (IPv4 and IPv6, since browsers
+// may resolve "localhost" to either), so nothing else on the Wi-Fi can reach it.
+let listening = 0;
+for (const host of LISTEN_HOSTS) {
+  const server = http.createServer((req, res) => {
+    handleRequest(req, res).catch((err) => {
+      console.error("[relay] unexpected error:", err);
+      if (!res.headersSent) sendJson(req, res, 500, { ok: false, error: "Relay error." });
+    });
+  });
+  server.on("error", (err) => {
+    console.error(`[relay] couldn't listen on ${host}:${PORT}: ${err.message}`);
+    if (host === LISTEN_HOSTS[0]) process.exit(1);
+  });
+  server.listen(PORT, host, () => {
+    if (++listening === 1) {
+      console.log(`FrameTV relay listening on http://localhost:${PORT} (this Mac only)`);
+      console.log(`Point the LifeOS House > FrameTV settings' "Local relay URL" field at this address.`);
+    }
+  });
+}

@@ -26,10 +26,14 @@ FrameTV relay listening on http://localhost:8787
 ```
 
 Leave that terminal window running. In the app, go to House > FrameTV >
-settings, and set **Local relay URL** to `http://localhost:8787` (or, if
-you're running this on a different machine on your network — like a Mac
-mini or Raspberry Pi that stays on — use that machine's IP instead, e.g.
-`http://192.168.1.42:8787`).
+settings, and set **Local relay URL** to `http://localhost:8787`.
+
+By default the relay only answers requests from this same computer. If you
+want to run it on a different machine on your network — like a Mac mini or
+Raspberry Pi that stays on — start it with `RELAY_LISTEN_HOST=0.0.0.0 npm start`
+and use that machine's IP in the app instead, e.g. `http://192.168.1.42:8787`.
+(Browsers may block a public https page from calling a plain-http LAN IP, so
+the same-computer setup is the most reliable.)
 
 ## Auto-start at login (recommended)
 
@@ -64,8 +68,10 @@ independently). Confirm it with your remote. The relay saves its token to
   doesn't need to be always-on, though it's fine to leave it running.
 - `tokens.json` holds your TV's pairing token. It's gitignored; don't commit
   it or share it.
-- The relay has no authentication of its own — anything running on your
-  machine, or any site your browser has open, could in principle POST to
-  `http://localhost:8787/send` and tell your TV to display an image. Worst
-  case is unwanted art on your TV; this is a personal convenience tool, not
-  hardened for a shared or untrusted network.
+- Access is limited: the relay listens on this computer only (not the
+  Wi-Fi), browser requests are accepted only from the LifeOS app
+  (`https://bonbonistl.github.io`) or a localhost preview, the TV address must
+  be a home-network IP, and images must be public `https://` URLs. Add other
+  app addresses with `RELAY_ALLOWED_ORIGINS=https://example.com` if you ever
+  host the app elsewhere. Programs already running on your Mac can still
+  call it; it has no password of its own.
