@@ -452,15 +452,19 @@ function renderPersonPrayers() {
   const open = personPrayers.filter((r) => !r.answered_at);
   const answered = personPrayers.filter((r) => r.answered_at).sort((a, b) => b.answered_at.localeCompare(a.answered_at));
   const itemHtml = (r) => `
-    <li data-id="${r.id}" class="${r.answered_at ? "done" : ""}">
+    <li data-id="${r.id}" data-prayer-row="${r.id}" class="${r.answered_at ? "done" : ""}">
       <div class="person-history-head">
         <label class="person-prayer-check">
           <input type="checkbox" ${r.answered_at ? "checked" : ""} title="Mark as answered" />
           <span class="person-history-date">${fmtCrmDate(r.pray_on)}${r.answered_at ? ` · answered ${fmtCrmDate(toLocalDateStr(new Date(r.answered_at)))}` : ""}</span>
         </label>
-        <button type="button" class="plan-item-remove person-prayer-remove" title="Delete request">&times;</button>
+        <span class="person-prayer-actions">
+          ${prayerFollowupBtnHtml()}
+          <button type="button" class="plan-item-remove person-prayer-remove" title="Delete request">&times;</button>
+        </span>
       </div>
       <div class="person-history-body">${escCrm(r.request)}</div>
+      ${prayerUpdatesHtml(r)}
     </li>`;
   el.innerHTML = personPrayers.length
     ? `<ul class="person-history">${[...open, ...answered].map(itemHtml).join("")}</ul>`
@@ -471,6 +475,7 @@ function renderPersonPrayers() {
   el.querySelectorAll(".person-prayer-remove").forEach((btn) => {
     btn.addEventListener("click", () => removePrayerRequest(btn.closest("[data-id]").dataset.id));
   });
+  wirePrayerUpdates(el);
 }
 
 document.getElementById("personNoteForm").addEventListener("submit", async (e) => {
@@ -513,6 +518,80 @@ async function removePrayerRequest(requestId) {
   if (error) { alert("Failed to delete prayer request: " + error.message); return; }
   await loadPersonHistory(openPersonId);
   refreshTodayIfLoaded();
+}
+
+// ---------- prayer follow-ups (shared with the Today dashboard) ----------
+// Stored on the request as updates: [{ at: ISO timestamp, body }], oldest first.
+// A row opts in with data-prayer-row="<request id>", a .prayer-followup-btn somewhere in it,
+// and the block from prayerUpdatesHtml (the list + a slot the add form opens into).
+
+function prayerUpdatesHtml(r) {
+  const ups = Array.isArray(r.updates) ? r.updates : [];
+  const list = ups.length
+    ? `<ul class="prayer-updates">${ups.map((u) => `
+        <li>
+          <span class="prayer-update-date">${fmtCrmDate(toLocalDateStr(new Date(u.at)))}</span>
+          <span class="prayer-update-body">${escCrm(u.body)}</span>
+          <button type="button" class="prayer-update-remove" data-at="${escCrm(u.at)}" title="Delete follow-up">&times;</button>
+        </li>`).join("")}</ul>`
+    : "";
+  return `${list}<div class="prayer-followup-slot"></div>`;
+}
+
+const prayerFollowupBtnHtml = () =>
+  `<button type="button" class="prayer-followup-btn" title="Add a follow-up note">+ Follow-up</button>`;
+
+function wirePrayerUpdates(el) {
+  el.querySelectorAll(".prayer-followup-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openPrayerFollowupForm(btn.closest("[data-prayer-row]")));
+  });
+  el.querySelectorAll(".prayer-update-remove").forEach((btn) => {
+    btn.addEventListener("click", () => removePrayerUpdate(btn.closest("[data-prayer-row]").dataset.prayerRow, btn.dataset.at));
+  });
+}
+
+function openPrayerFollowupForm(row) {
+  const slot = row.querySelector(".prayer-followup-slot");
+  if (slot.firstElementChild) { slot.querySelector("input").focus(); return; }
+  slot.innerHTML = `
+    <form class="prayer-followup-form">
+      <input type="text" maxlength="1000" placeholder="What's the latest?" required />
+      <button type="submit">Save</button>
+    </form>`;
+  const form = slot.firstElementChild;
+  const input = form.querySelector("input");
+  const close = () => { slot.innerHTML = ""; };
+  input.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+  // Clicking away from an empty box just closes it.
+  input.addEventListener("blur", () => setTimeout(() => {
+    if (!input.value.trim() && !form.contains(document.activeElement)) close();
+  }, 150));
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const body = input.value.trim();
+    if (!body) return;
+    form.querySelectorAll("input, button").forEach((x) => { x.disabled = true; });
+    const ok = await savePrayerUpdates(row.dataset.prayerRow, (ups) => [...ups, { at: new Date().toISOString(), body }]);
+    if (!ok) form.querySelectorAll("input, button").forEach((x) => { x.disabled = false; });
+  });
+  input.focus();
+}
+
+async function removePrayerUpdate(requestId, at) {
+  if (!confirm("Delete this follow-up?")) return;
+  await savePrayerUpdates(requestId, (ups) => ups.filter((u) => u.at !== at));
+}
+
+// Read-modify-write against the latest row so an edit made elsewhere isn't clobbered.
+async function savePrayerUpdates(requestId, change) {
+  const { data, error } = await sb.from("prayer_requests").select("updates").eq("id", requestId).single();
+  if (error) { alert("Failed to load follow-ups: " + error.message); return false; }
+  const updates = change(Array.isArray(data.updates) ? data.updates : []);
+  const { error: saveErr } = await sb.from("prayer_requests").update({ updates }).eq("id", requestId);
+  if (saveErr) { alert("Failed to save follow-up: " + saveErr.message); return false; }
+  if (openPersonId != null) await loadPersonHistory(openPersonId);
+  refreshTodayIfLoaded();
+  return true;
 }
 
 // Shared with the Today dashboard's prayer list.

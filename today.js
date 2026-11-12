@@ -634,11 +634,12 @@ function renderTodayPrayers(now) {
   };
 
   const rowHtml = (e) => `
-    <div class="today-row ${e.diff === 0 ? "today-row-highlight" : ""}">
+    <div class="today-row ${e.diff === 0 ? "today-row-highlight" : ""}" data-prayer-row="${e.r.id}">
       <div class="today-row-main">
         <button type="button" class="today-row-title today-person-btn" data-person-id="${e.r.person_id}">${escHtml(e.r.people?.name || "Someone")}</button>
         <div class="today-prayer-text">${escHtml(e.r.request)}</div>
-        <div class="today-row-sub">${whenLabel(e.diff, e.r.pray_on)}</div>
+        ${prayerUpdatesHtml(e.r)}
+        <div class="today-row-sub">${whenLabel(e.diff, e.r.pray_on)} · ${prayerFollowupBtnHtml()}</div>
       </div>
       <label class="today-celebrate">
         <input type="checkbox" data-prayer-id="${e.r.id}" />
@@ -675,6 +676,7 @@ function renderTodayPrayers(now) {
   el.querySelectorAll(".today-person-btn").forEach((btn) => {
     btn.addEventListener("click", () => openTodayPerson(btn.dataset.personId));
   });
+  wirePrayerUpdates(el); // follow-up notes (crm.js)
 }
 
 // ---------- jobs ----------
