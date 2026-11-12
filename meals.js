@@ -6,6 +6,7 @@ let mealsRecipes = [];   // [{id, title, url, url_key, source_text, notes, creat
 let mealsPlan = [];      // [{id, recipe_id, plan_date, cooked_at, cooked_by, created_by}]
 let mealsWeekStart = mealsMonday(new Date());
 let mealsTitleTouched = false; // stop auto-filling the title once it's been typed in
+let mealsSelectedRecipeId = null; // set when a saved recipe is picked from the name dropdown
 
 function mealsMonday(d) {
   const x = new Date(d);
@@ -96,7 +97,7 @@ function mealsFindRecipeByKey(key) {
 }
 function mealsFindRecipeByTitle(title) {
   const t = (title || "").trim().toLowerCase();
-  return t ? mealsRecipes.find((r) => !r.url && r.title.trim().toLowerCase() === t) : null;
+  return t ? mealsRecipes.find((r) => !r.url_key && r.title.trim().toLowerCase() === t) : null;
 }
 
 function mealsCookedRows(recipeId) {
@@ -359,12 +360,21 @@ function mealsJumpToDate(date) {
   renderMeals();
 }
 
+function mealsRecipeStats(id) {
+  const cooked = mealsCookedRows(id);
+  const last = cooked.reduce((m, p) => (p.plan_date > m ? p.plan_date : m), "");
+  return { count: cooked.length, last };
+}
+
 // Shows whether what's in the form already matches a saved recipe.
 function updateMealMatchHint() {
   const el = document.getElementById("mealMatchHint");
   const urlVal = document.getElementById("mealUrl").value.trim();
+  const selected = mealsSelectedRecipeId && mealsRecipes.find((r) => r.id === mealsSelectedRecipeId);
   let match = null;
-  if (urlVal) {
+  if (selected) {
+    match = selected;
+  } else if (urlVal) {
     const key = mealsNormalizeUrl(urlVal);
     if (!key) { el.textContent = "That doesn't look like a link."; return; }
     match = mealsFindRecipeByKey(key);
@@ -374,7 +384,7 @@ function updateMealMatchHint() {
   if (!match) { el.textContent = ""; return; }
   const cooked = mealsCookedRows(match.id);
   const last = cooked.reduce((m, p) => (p.plan_date > m ? p.plan_date : m), "");
-  el.textContent = `Already in the recipe box as "${match.title}"` +
+  el.textContent = (match.id === mealsSelectedRecipeId ? `Using your saved recipe "${match.title}"` : `Already in the recipe box as "${match.title}"`) +
     (cooked.length ? ` — cooked ${cooked.length}×, last ${mealsFmtDate(last, { month: "short", day: "numeric" })}.` : ".") +
     " Adding will use that recipe.";
 }
@@ -416,6 +426,8 @@ async function lookupMealPageTitle(urlVal) {
 document.getElementById("mealUrl").addEventListener("input", () => {
   const urlVal = document.getElementById("mealUrl").value;
   const titleEl = document.getElementById("mealTitle");
+  // Typing a link means a different recipe than one picked from the name list.
+  if (mealsSelectedRecipeId && urlVal.trim()) { mealsSelectedRecipeId = null; mealsTitleTouched = false; }
   if (!mealsTitleTouched) {
     titleEl.value = mealsKnownUrlTitle(urlVal) || mealsTitleFromPaste(document.getElementById("mealPaste").value);
   }
@@ -444,7 +456,103 @@ document.getElementById("mealPaste").addEventListener("input", () => {
 
 document.getElementById("mealTitle").addEventListener("input", (e) => {
   mealsTitleTouched = e.target.value.trim() !== "";
+  const selected = mealsSelectedRecipeId && mealsRecipes.find((r) => r.id === mealsSelectedRecipeId);
+  if (selected && selected.title !== e.target.value) mealsSelectedRecipeId = null;
   updateMealMatchHint();
+  renderMealSuggest();
+});
+
+// ---------- name type-ahead ----------
+// Typing in the name box lists saved recipes (empty box: most recently cooked). Picking one
+// reuses that exact recipe, so cooking it again adds to its history instead of a duplicate.
+let mealsSuggestIndex = -1;
+let mealsSuggestItems = [];
+
+function renderMealSuggest() {
+  const box = document.getElementById("mealTitleSuggest");
+  const input = document.getElementById("mealTitle");
+  const q = input.value.trim().toLowerCase();
+  const withStats = mealsRecipes.map((r) => ({ r, ...mealsRecipeStats(r.id) }));
+  let items;
+  if (!q) {
+    items = withStats.sort((a, b) => b.last.localeCompare(a.last) || b.r.id - a.r.id);
+  } else {
+    items = withStats
+      .map((x) => {
+        const t = x.r.title.toLowerCase();
+        const pos = t.indexOf(q);
+        // A match at the start of a word ("orange" in "Costco Orange Chicken") beats one mid-word.
+        const wordStart = pos === 0 || (pos > 0 && /[^\p{L}\p{N}]/u.test(t[pos - 1]));
+        return { ...x, pos, wordStart };
+      })
+      .filter((x) => x.pos >= 0)
+      // Then the ones you actually cook, most recent first.
+      .sort((a, b) => (b.wordStart - a.wordStart) || b.last.localeCompare(a.last) || a.r.title.localeCompare(b.r.title));
+  }
+  // Nothing to suggest if the box already holds exactly the picked recipe.
+  if (mealsSelectedRecipeId && items.length === 1 && items[0].r.id === mealsSelectedRecipeId) items = [];
+  mealsSuggestItems = items.slice(0, 8);
+  mealsSuggestIndex = -1;
+
+  if (!mealsSuggestItems.length || document.activeElement !== input) { box.classList.add("hidden"); return; }
+  box.innerHTML = (q ? "" : `<div class="meal-suggest-head">Recent recipes</div>`) + mealsSuggestItems.map((x, i) => {
+    const t = escapeHtml(x.r.title);
+    const title = q ? t.replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "i"), "<mark>$1</mark>") : t;
+    const where = x.r.url_key ? x.r.url_key.split("/")[0] : (x.r.source_text ? "pasted" : "no link");
+    const stats = x.count ? `cooked ${x.count}× · last ${mealsFmtDate(x.last, { month: "short", day: "numeric" })}` : "never cooked";
+    return `<div class="meal-suggest-item" role="option" data-i="${i}">
+      <span class="meal-suggest-title">${title}</span>
+      <span class="meal-suggest-meta">${escapeHtml(where)} · ${escapeHtml(stats)}</span>
+    </div>`;
+  }).join("");
+  box.classList.remove("hidden");
+  box.querySelectorAll(".meal-suggest-item").forEach((el) => {
+    // mousedown (not click) so it fires before the input's blur hides the list.
+    el.addEventListener("mousedown", (e) => { e.preventDefault(); pickMealSuggestion(Number(el.dataset.i)); });
+  });
+}
+
+function highlightMealSuggest() {
+  document.querySelectorAll("#mealTitleSuggest .meal-suggest-item").forEach((el, i) => {
+    el.classList.toggle("active", i === mealsSuggestIndex);
+    if (i === mealsSuggestIndex) el.scrollIntoView({ block: "nearest" });
+  });
+}
+
+function pickMealSuggestion(i) {
+  const x = mealsSuggestItems[i];
+  if (!x) return;
+  mealsSelectedRecipeId = x.r.id;
+  mealsTitleTouched = true;
+  document.getElementById("mealTitle").value = x.r.title;
+  // The saved recipe already has its own link/text; clear the other fields so they don't conflict.
+  document.getElementById("mealUrl").value = "";
+  document.getElementById("mealPaste").value = "";
+  setMealTitleStatus("");
+  document.getElementById("mealTitleSuggest").classList.add("hidden");
+  updateMealMatchHint();
+}
+
+const mealTitleInput = document.getElementById("mealTitle");
+mealTitleInput.addEventListener("focus", renderMealSuggest);
+mealTitleInput.addEventListener("blur", () => document.getElementById("mealTitleSuggest").classList.add("hidden"));
+mealTitleInput.addEventListener("keydown", (e) => {
+  const open = !document.getElementById("mealTitleSuggest").classList.contains("hidden");
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    if (!open) { renderMealSuggest(); return; }
+    mealsSuggestIndex = Math.min(mealsSuggestIndex + 1, mealsSuggestItems.length - 1);
+    highlightMealSuggest();
+  } else if (e.key === "ArrowUp" && open) {
+    e.preventDefault();
+    mealsSuggestIndex = Math.max(mealsSuggestIndex - 1, 0);
+    highlightMealSuggest();
+  } else if (e.key === "Enter" && open && mealsSuggestIndex >= 0) {
+    e.preventDefault();
+    pickMealSuggestion(mealsSuggestIndex);
+  } else if (e.key === "Escape" && open) {
+    document.getElementById("mealTitleSuggest").classList.add("hidden");
+  }
 });
 
 document.getElementById("mealAddForm").addEventListener("submit", async (e) => {
@@ -455,14 +563,14 @@ document.getElementById("mealAddForm").addEventListener("submit", async (e) => {
   const title = document.getElementById("mealTitle").value.trim();
   const date = document.getElementById("mealDate").value;
 
-  if (!urlRaw && !paste) { alert("Add a link or paste the recipe."); return; }
   const key = urlRaw ? mealsNormalizeUrl(urlRaw) : null;
   if (urlRaw && !key) { alert("That link doesn't look right."); return; }
   if (!title) { alert("Give it a name."); return; }
 
   btn.disabled = true;
   try {
-    let recipe = key ? mealsFindRecipeByKey(key) : mealsFindRecipeByTitle(title);
+    let recipe = (mealsSelectedRecipeId && mealsRecipes.find((r) => r.id === mealsSelectedRecipeId))
+      || (key ? mealsFindRecipeByKey(key) : mealsFindRecipeByTitle(title));
 
     if (recipe) {
       // Fill in a pasted recipe on an existing link-only recipe, but never overwrite one.
@@ -474,8 +582,12 @@ document.getElementById("mealAddForm").addEventListener("submit", async (e) => {
       const row = { title, url: urlRaw ? mealsParseUrl(urlRaw).href : null, url_key: key, source_text: paste || null };
       let { data, error } = await sb.from("recipes").insert(row).select().single();
       if (error && error.code === "23505") {
-        // Someone else in the family saved the same link since this page loaded.
-        ({ data, error } = await sb.from("recipes").select("*").eq("url_key", key).single());
+        // Someone else in the family saved the same link (or name) since this page loaded.
+        const q = sb.from("recipes").select("*");
+        const res = key ? await q.eq("url_key", key) : await q.is("url_key", null);
+        error = res.error;
+        data = res.data && res.data.find((r) => (key ? true : r.title.trim().toLowerCase() === title.toLowerCase()));
+        if (!error && !data) error = { message: "Couldn't find the existing recipe" };
       }
       if (error) { alert("Failed to save recipe: " + error.message); return; }
       recipe = data;
@@ -492,6 +604,7 @@ document.getElementById("mealAddForm").addEventListener("submit", async (e) => {
     document.getElementById("mealPaste").value = "";
     document.getElementById("mealTitle").value = "";
     mealsTitleTouched = false;
+    mealsSelectedRecipeId = null;
     setMealTitleStatus("");
     renderMeals();
   } finally {

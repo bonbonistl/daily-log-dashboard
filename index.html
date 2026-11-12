@@ -77,13 +77,16 @@
             <input type="url" id="mealUrl" placeholder="Recipe link (website, Instagram, YouTube…)" maxlength="2000" />
             <textarea id="mealPaste" rows="4" placeholder="…or paste the recipe here (e.g. copied from an Instagram caption)" maxlength="20000"></textarea>
             <div class="meal-add-row">
-              <input type="text" id="mealTitle" placeholder="Recipe name" maxlength="200" required />
+              <div class="meal-title-wrap">
+                <input type="text" id="mealTitle" placeholder="Recipe name — start typing to reuse a saved one" maxlength="200" required autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="mealTitleSuggest" />
+                <div id="mealTitleSuggest" class="meal-suggest hidden" role="listbox"></div>
+              </div>
               <label class="meal-date-label">Day <input type="date" id="mealDate" /></label>
               <button type="submit" id="mealAddBtn">Add</button>
             </div>
             <div id="mealTitleStatus" class="hint meal-title-status"></div>
             <div id="mealMatchHint" class="hint meal-match-hint"></div>
-            <p class="hint meal-form-help">Leave the day blank to just save it to the recipe box. The same link always maps to the same recipe, even if it has different tracking bits on the end.</p>
+            <p class="hint meal-form-help">A link and pasted text are both optional. A name on its own works too (like "Costco Orange Chicken"). Leave the day blank to just save it to the recipe box. The same link always maps to the same recipe, even with different tracking bits on the end.</p>
           </form>
         </section>
 
