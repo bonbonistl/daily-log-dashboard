@@ -2224,3 +2224,5 @@ header .controls { grid-row: 3; grid-column: 1 / -1; flex-wrap: wrap; }
   .meals-search { width: 100%; }
 }
 .meals-history .hint, .meals-recipes .hint { color: var(--muted); font-size: 12px; }
+.meal-title-status { font-size: 12px; color: var(--muted); font-style: italic; }
+.meal-title-status:empty { display: none; }

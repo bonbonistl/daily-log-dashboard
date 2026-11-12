@@ -379,14 +379,50 @@ function updateMealMatchHint() {
     " Adding will use that recipe.";
 }
 
+// ---------- page-title lookup ----------
+// The recipe-title edge function reads the page's real recipe name (browsers can't fetch
+// other sites directly). Some sites block it; then the slug guess above stays.
+const mealsPageTitles = new Map(); // url_key → title ("" = looked up, nothing found)
+let mealsLookupTimer = null;
+
+// Best name we have for a link without asking the server: a saved recipe's, a looked-up one, or the slug.
+function mealsKnownUrlTitle(urlVal) {
+  const key = mealsNormalizeUrl(urlVal);
+  if (!key) return "";
+  const existing = mealsFindRecipeByKey(key);
+  return (existing && existing.title) || mealsPageTitles.get(key) || mealsTitleFromUrl(urlVal);
+}
+
+function setMealTitleStatus(text) {
+  document.getElementById("mealTitleStatus").textContent = text;
+}
+
+async function lookupMealPageTitle(urlVal) {
+  const key = mealsNormalizeUrl(urlVal);
+  if (!key || mealsFindRecipeByKey(key) || mealsPageTitles.has(key)) return;
+  setMealTitleStatus("Looking up the recipe name…");
+  let title = "";
+  try {
+    const { data } = await withTimeout(sb.functions.invoke("recipe-title", { body: { url: urlVal.trim() } }), 15000, "Name lookup");
+    title = (data && data.title) || "";
+  } catch { /* fall back to the slug guess */ }
+  mealsPageTitles.set(key, title);
+  // Ignore the answer if the link changed or a name was typed meanwhile.
+  if (mealsNormalizeUrl(document.getElementById("mealUrl").value) !== key) return;
+  setMealTitleStatus(title ? "" : "Couldn't read the name from that page. Check the name below.");
+  if (title && !mealsTitleTouched) document.getElementById("mealTitle").value = title;
+}
+
 document.getElementById("mealUrl").addEventListener("input", () => {
   const urlVal = document.getElementById("mealUrl").value;
   const titleEl = document.getElementById("mealTitle");
   if (!mealsTitleTouched) {
-    const existing = mealsFindRecipeByKey(mealsNormalizeUrl(urlVal));
-    titleEl.value = existing ? existing.title : (mealsTitleFromUrl(urlVal) || mealsTitleFromPaste(document.getElementById("mealPaste").value));
+    titleEl.value = mealsKnownUrlTitle(urlVal) || mealsTitleFromPaste(document.getElementById("mealPaste").value);
   }
+  setMealTitleStatus("");
   updateMealMatchHint();
+  clearTimeout(mealsLookupTimer);
+  if (mealsNormalizeUrl(urlVal)) mealsLookupTimer = setTimeout(() => lookupMealPageTitle(urlVal), 500);
 });
 
 document.getElementById("mealPaste").addEventListener("input", () => {
@@ -400,7 +436,7 @@ document.getElementById("mealPaste").addEventListener("input", () => {
     return;
   }
   // A link's slug (or a saved recipe's name) wins; otherwise name it from the paste.
-  if (!mealsTitleTouched && !mealsTitleFromUrl(urlEl.value) && !mealsFindRecipeByKey(mealsNormalizeUrl(urlEl.value))) {
+  if (!mealsTitleTouched && !mealsKnownUrlTitle(urlEl.value)) {
     document.getElementById("mealTitle").value = mealsTitleFromPaste(pasteEl.value);
   }
   updateMealMatchHint();
@@ -456,6 +492,7 @@ document.getElementById("mealAddForm").addEventListener("submit", async (e) => {
     document.getElementById("mealPaste").value = "";
     document.getElementById("mealTitle").value = "";
     mealsTitleTouched = false;
+    setMealTitleStatus("");
     renderMeals();
   } finally {
     btn.disabled = false;
