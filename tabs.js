@@ -98,7 +98,9 @@ CONNECTIONS_SUBTABS.forEach((t) => {
 // ---------- home sub-tabs ----------
 const HOME_SUBTABS = [
   { key: "frametv", btnId: "frametvSubtabBtn", contentId: "homeFrameTV" },
+  { key: "meals", btnId: "mealsSubtabBtn", contentId: "homeMeals" },
 ];
+let mealsTabLoaded = false;
 
 function activateHomeSubtab(key) {
   HOME_SUBTABS.forEach((t) => {
@@ -106,6 +108,10 @@ function activateHomeSubtab(key) {
     document.getElementById(t.contentId).classList.toggle("hidden", t.key !== key);
   });
   currentHomeSubtab = key;
+  if (key === "meals" && !mealsTabLoaded) {
+    mealsTabLoaded = true;
+    loadMealsData();
+  }
   updateUrlHash();
 }
 

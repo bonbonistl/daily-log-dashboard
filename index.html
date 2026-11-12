@@ -62,6 +62,56 @@
   <main id="homeApp" class="tab-content hidden">
     <div class="subtabs">
       <button class="subtab-btn active" id="frametvSubtabBtn">FrameTV</button>
+      <button class="subtab-btn" id="mealsSubtabBtn">Meals</button>
+    </div>
+
+    <div id="homeMeals" class="subtab-content hidden">
+      <div id="mealsLoading">Loading data…</div>
+      <div id="mealsContent" class="hidden">
+        <section class="panel">
+          <div class="panel-heading-row">
+            <h2>Add a Meal <span class="hint">shared with your family</span></h2>
+            <span id="mealsUpdatedAt" class="updated-at"></span>
+          </div>
+          <form id="mealAddForm" class="meal-add-form">
+            <input type="url" id="mealUrl" placeholder="Recipe link (website, Instagram, YouTube…)" maxlength="2000" />
+            <textarea id="mealPaste" rows="4" placeholder="…or paste the recipe here (e.g. copied from an Instagram caption)" maxlength="20000"></textarea>
+            <div class="meal-add-row">
+              <input type="text" id="mealTitle" placeholder="Recipe name" maxlength="200" required />
+              <label class="meal-date-label">Day <input type="date" id="mealDate" /></label>
+              <button type="submit" id="mealAddBtn">Add</button>
+            </div>
+            <div id="mealMatchHint" class="hint meal-match-hint"></div>
+            <p class="hint meal-form-help">Leave the day blank to just save it to the recipe box. The same link always maps to the same recipe, even if it has different tracking bits on the end.</p>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading-row">
+            <h2 id="mealsWeekHeading">This Week</h2>
+            <div class="checkin-date-nav meal-week-nav">
+              <button id="mealsPrevWeekBtn">‹ Prev week</button>
+              <button id="mealsThisWeekBtn">This week</button>
+              <button id="mealsNextWeekBtn">Next week ›</button>
+            </div>
+          </div>
+          <p class="hint drawer-hint">Check a meal off once you've cooked it — that's what goes into the history.</p>
+          <div id="mealsWeek" class="meals-week"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Cooked History <span class="hint" id="mealsHistoryCount"></span></h2>
+          <div id="mealsHistory" class="meals-history"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading-row">
+            <h2>Recipe Box <span class="hint" id="mealsRecipeCount"></span></h2>
+            <input type="search" id="mealsRecipeSearch" class="meals-search" placeholder="Search recipes…" />
+          </div>
+          <div id="mealsRecipes" class="meals-recipes"></div>
+        </section>
+      </div>
     </div>
 
     <div id="homeFrameTV" class="subtab-content">
@@ -905,6 +955,7 @@
   <script src="crm.js"></script>
   <script src="paper.js"></script>
   <script src="frametv.js"></script>
+  <script src="meals.js"></script>
   <script src="settings.js"></script>
   <script src="family.js"></script>
   <script src="today.js"></script>
