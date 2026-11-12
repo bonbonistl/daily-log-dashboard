@@ -53,7 +53,8 @@ async function loadTodayData() {
     sb.from("prayer_requests").select("*, people(name)").is("answered_at", null).order("pray_on", { ascending: true }),
     // Every cause ever logged (not just today's) so a recurring one like "Sabbath" is a one-click chip.
     sb.from("rule_of_life_disruptions").select("id, log_date, cause").order("id", { ascending: true }),
-    sb.from("consumption_checkins").select("*").gte("log_date", toLocalDateStr(consumptionWindowStart())),
+    // All-time (one small row per day) so the check-in patterns can line it up with the tags above.
+    sb.from("consumption_checkins").select("*").order("log_date", { ascending: true }),
   ]);
 
   let results;
@@ -98,6 +99,7 @@ function renderTodayDashboard() {
   renderTodayHabits(now, todayStr);
   renderTodayHappened(todayStr);
   renderTodayConsumption(todayStr);
+  renderTodayCheckinPatterns();
   renderTodayBirthdays(now);
   renderTodayPrayers(now);
   renderTodayJobs(now);
@@ -825,23 +827,38 @@ document.getElementById("todayHealthOpenBtn").addEventListener("click", () => {
 
 // ---------- what happened today (rule_of_life_disruptions) ----------
 // Moved here from the Habits tab, which still shows the 14-day "What's Getting In The Way"
-// trends. Suggestion chips come from every cause ever logged (groupCauses in spiritual.js),
-// minus the ones already logged today, which show below with a remove button.
+// trends. Now part of the merged Daily check-in, and doubles as the consumption "what was
+// going on?" note: anything saved becomes a reusable tag. Today's tags sit on top (solid,
+// removable); every tag ever saved (groupCauses in spiritual.js, most-used first) shows
+// below as a one-tap dashed chip, minus today's.
+const HAPPENED_SUGGESTIONS_SHOWN = 12;
+let happenedShowAll = false;
+
 function renderTodayHappened(todayStr) {
   const todays = todayData.disruptions.filter((d) => d.log_date === todayStr);
   const todaysCauses = new Set(todays.map((d) => d.cause.trim().toLowerCase()));
   const entries = groupCauses(todayData.disruptions).filter((e) => !todaysCauses.has(e.label.trim().toLowerCase()));
+  const shown = happenedShowAll ? entries : entries.slice(0, HAPPENED_SUGGESTIONS_SHOWN);
+  const hiddenCount = entries.length - shown.length;
 
   const sugEl = document.getElementById("todayHappenedSuggestions");
-  sugEl.innerHTML = entries.map((e, i) => `
-    <button type="button" class="disruption-suggestion-chip" data-index="${i}">${escHtml(e.label)}</button>
-  `).join("");
+  sugEl.innerHTML = shown.map((e, i) => `
+    <button type="button" class="disruption-suggestion-chip" data-index="${i}" title="Used ${e.count} time${e.count === 1 ? "" : "s"}">+ ${escHtml(e.label)}</button>
+  `).join("") + (hiddenCount > 0
+    ? `<button type="button" class="disruption-suggestion-more" data-more="1">${hiddenCount} more…</button>`
+    : (happenedShowAll && entries.length > HAPPENED_SUGGESTIONS_SHOWN ? `<button type="button" class="disruption-suggestion-more" data-more="0">Show fewer</button>` : ""));
   sugEl.querySelectorAll(".disruption-suggestion-chip").forEach((btn) => {
-    btn.addEventListener("click", () => logTodayHappened(entries[Number(btn.dataset.index)].label));
+    btn.addEventListener("click", () => logTodayHappened(shown[Number(btn.dataset.index)].label));
+  });
+  sugEl.querySelector(".disruption-suggestion-more")?.addEventListener("click", (e) => {
+    happenedShowAll = e.currentTarget.dataset.more === "1";
+    renderTodayHappened(todayStr);
   });
 
   const listEl = document.getElementById("todayHappenedList");
-  listEl.innerHTML = todays.map((d) => `
+  listEl.classList.toggle("is-empty", todays.length === 0);
+  listEl.innerHTML = todays.length ? "" : `<span class="hint">Nothing tagged yet today.</span>`;
+  listEl.innerHTML += todays.map((d) => `
     <span class="disruption-chip" data-id="${d.id}">
       ${escHtml(d.cause)}
       <button aria-label="Remove">&times;</button>
@@ -860,7 +877,15 @@ async function logTodayHappened(causeOverride) {
   const input = document.getElementById("todayHappenedCause");
   const cause = (causeOverride != null ? causeOverride : input.value).trim();
   if (!cause) return;
-  const { error } = await sb.from("rule_of_life_disruptions").insert({ log_date: todayLocalStr(), cause });
+  const todayStr = todayLocalStr();
+  // Already tagged today (any capitalization) — nothing to add.
+  if (todayData.disruptions.some((d) => d.log_date === todayStr && d.cause.trim().toLowerCase() === cause.toLowerCase())) {
+    input.value = "";
+    return;
+  }
+  // Typed text that matches a saved tag reuses that tag's spelling, so patterns group cleanly.
+  const saved = groupCauses(todayData.disruptions).find((e) => e.label.trim().toLowerCase() === cause.toLowerCase());
+  const { error } = await sb.from("rule_of_life_disruptions").insert({ log_date: todayStr, cause: saved ? saved.label : cause });
   if (error) { alert("Failed to log: " + error.message); return; }
   input.value = "";
   await afterTodayHappenedChange();
@@ -913,10 +938,8 @@ function renderTodayConsumption(todayStr) {
         <div class="consumption-areas">
           ${CONSUMPTION_AREAS.map((a) => `<button type="button" class="consumption-area${areas.has(a) ? " active" : ""}" data-area="${escHtml(a)}">${escHtml(a)}</button>`).join("")}
         </div>
-        <div class="disruption-form-row">
-          <input type="text" id="todayConsumptionNote" placeholder="What was going on? (tired, stressed, celebrating…)" maxlength="300" value="${escHtml(today.note || "")}" aria-label="Consumption note" />
-          <button type="button" id="todayConsumptionClear" class="consumption-clear">Clear</button>
-        </div>
+        ${today.note ? `<div class="consumption-legacy-note">Note: ${escHtml(today.note)}</div>` : ""}
+        <button type="button" id="todayConsumptionClear" class="consumption-clear">Clear today's check-in</button>
       </div>`;
   }
 
@@ -927,7 +950,9 @@ function renderTodayConsumption(todayStr) {
     const ds = toLocalDateStr(d);
     const row = rows.find((r) => r.log_date === ds);
     const lvl = CONSUMPTION_LEVELS.find((l) => l.key === row?.level);
-    days.push(`<div class="consumption-day${ds === todayStr ? " is-today" : ""}" title="${escHtml(d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }))}: ${lvl ? lvl.label : "not logged"}${row?.note ? " — " + escHtml(row.note) : ""}">
+    const tags = todayData.disruptions.filter((x) => x.log_date === ds).map((x) => x.cause);
+    if (row?.note) tags.push(row.note);
+    days.push(`<div class="consumption-day${ds === todayStr ? " is-today" : ""}" title="${escHtml(d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }))}: ${lvl ? lvl.label : "not logged"}${tags.length ? " — " + escHtml(tags.join(", ")) : ""}">
       <span class="consumption-dot${row ? " level-" + row.level : ""}"></span>
       <span class="consumption-day-name">${d.toLocaleDateString(undefined, { weekday: "narrow" })}</span>
     </div>`);
@@ -954,11 +979,6 @@ function renderTodayConsumption(todayStr) {
       saveTodayConsumption({ areas: CONSUMPTION_AREAS.filter((a) => areas.has(a)) });
     });
   });
-  const noteEl = document.getElementById("todayConsumptionNote");
-  if (noteEl) {
-    noteEl.addEventListener("change", () => saveTodayConsumption({ note: noteEl.value.trim() || null }));
-    noteEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); noteEl.blur(); } });
-  }
   document.getElementById("todayConsumptionClear")?.addEventListener("click", clearTodayConsumption);
 }
 
@@ -977,6 +997,7 @@ async function saveTodayConsumption(patch) {
   if (error) { alert("Failed to save check-in: " + error.message); return; }
   todayData.consumption = (todayData.consumption || []).filter((r) => r.log_date !== todayStr).concat(data);
   renderTodayConsumption(todayStr);
+  renderTodayCheckinPatterns();
 }
 
 async function clearTodayConsumption() {
@@ -985,4 +1006,72 @@ async function clearTodayConsumption() {
   if (error) { alert("Failed to clear: " + error.message); return; }
   todayData.consumption = (todayData.consumption || []).filter((r) => r.log_date !== todayStr);
   renderTodayConsumption(todayStr);
+  renderTodayCheckinPatterns();
+}
+
+// ---------- check-in patterns (tags × consumption) ----------
+// Lines up each saved tag with the consumption level logged that same day, so things like
+// "stressed" or "travel" days that tend to run high stand out. Needs a few days with both.
+const PATTERN_MIN_DAYS = 3; // days with a check-in AND at least one tag before showing anything
+const PATTERN_MIN_TAG_DAYS = 2; // a tag needs this many checked-in days to get a row
+const PATTERN_ROWS = 6;
+
+function renderTodayCheckinPatterns() {
+  const el = document.getElementById("todayCheckinPatterns");
+  if (!el || !todayData) return;
+  const levelByDate = new Map((todayData.consumption || []).map((r) => [r.log_date, r.level]));
+
+  // tag key -> { label, dates:Set }, label = most-used spelling (same as groupCauses)
+  const labels = new Map(groupCauses(todayData.disruptions).map((e) => [e.label.trim().toLowerCase(), e.label]));
+  const tags = new Map();
+  const taggedCheckinDays = new Set();
+  todayData.disruptions.forEach((d) => {
+    const key = d.cause.trim().toLowerCase();
+    if (!tags.has(key)) tags.set(key, { label: labels.get(key) || d.cause, dates: new Set() });
+    tags.get(key).dates.add(d.log_date);
+    if (levelByDate.has(d.log_date)) taggedCheckinDays.add(d.log_date);
+  });
+
+  if (taggedCheckinDays.size < PATTERN_MIN_DAYS) {
+    el.innerHTML = `<div class="checkin-patterns-empty">📈 Patterns show up here once ${PATTERN_MIN_DAYS} days have both a consumption check-in and a tag
+      <span class="hint">(${taggedCheckinDays.size} so far)</span>.</div>`;
+    return;
+  }
+
+  const allLevels = [...levelByDate.values()];
+  const isHigh = (l) => l === "a_bit_much" || l === "overdid_it";
+  const baseline = allLevels.filter(isHigh).length / allLevels.length;
+
+  const rows = [...tags.values()].map((t) => {
+    const levels = [...t.dates].map((ds) => levelByDate.get(ds)).filter(Boolean);
+    const counts = Object.fromEntries(CONSUMPTION_LEVELS.map((l) => [l.key, levels.filter((x) => x === l.key).length]));
+    const high = counts.a_bit_much + counts.overdid_it;
+    return { label: t.label, n: levels.length, counts, high, rate: levels.length ? high / levels.length : 0 };
+  }).filter((r) => r.n >= PATTERN_MIN_TAG_DAYS)
+    .sort((a, b) => b.rate - a.rate || b.n - a.n)
+    .slice(0, PATTERN_ROWS);
+
+  const pct = (x) => Math.round(x * 100);
+  const flag = (r) => r.rate >= baseline + 0.2 ? `<span class="pattern-flag up">runs high</span>`
+    : r.rate <= baseline - 0.2 ? `<span class="pattern-flag down">usually in check</span>` : "";
+  const top = rows.find((r) => r.rate >= baseline + 0.2);
+  const teaser = top ? `“${escHtml(top.label)}” days tend to run high` : `${taggedCheckinDays.size} tagged days so far`;
+
+  const body = rows.length ? rows.map((r) => `
+    <div class="pattern-row">
+      <div class="pattern-label">${escHtml(r.label)} ${flag(r)}</div>
+      <div class="pattern-bar" title="${CONSUMPTION_LEVELS.map((l) => `${l.label}: ${r.counts[l.key]}`).join(" · ")}">
+        ${CONSUMPTION_LEVELS.map((l) => r.counts[l.key] ? `<span class="consumption-dot level-${l.key}" style="flex:${r.counts[l.key]}"></span>` : "").join("")}
+      </div>
+      <div class="pattern-count">${r.high} of ${r.n} high</div>
+    </div>`).join("")
+    : `<div class="hint">No tag has ${PATTERN_MIN_TAG_DAYS}+ checked-in days yet.</div>`;
+
+  const wasOpen = el.querySelector("details")?.open;
+  el.innerHTML = `
+    <details class="checkin-patterns"${wasOpen ? " open" : ""}>
+      <summary><span>📈 Patterns</span> <span class="hint">${teaser}</span></summary>
+      <div class="pattern-baseline">Overall, ${pct(baseline)}% of checked-in days were “a bit much” or more. Bars show how days with each tag went.</div>
+      ${body}
+    </details>`;
 }

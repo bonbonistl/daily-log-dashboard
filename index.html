@@ -219,25 +219,26 @@
           <div id="todayHabits"></div>
         </div>
 
-        <div class="panel" id="todayHappenedPanel">
+        <!-- One check-in: tags for the day + how consumption went, so the two can be
+             lined up over time (patterns block at the bottom, today.js). -->
+        <div class="panel" id="todayCheckinPanel">
           <div class="panel-heading-row">
-            <h2>What happened today? <span class="hint">optional — helps spot trends</span></h2>
+            <h2>Daily check-in <span class="hint">optional — patterns show up over time</span></h2>
           </div>
-          <div class="disruption-form">
+          <div class="checkin-section" id="todayConsumptionPanel">
+            <div class="checkin-label">Consumption <span class="hint">did I overdo it today?</span></div>
+            <div id="todayConsumption"></div>
+          </div>
+          <div class="checkin-section" id="todayHappenedPanel">
+            <div class="checkin-label">What was going on today? <span class="hint">tap a saved tag or add a new one</span></div>
+            <div id="todayHappenedList" class="disruption-today-list"></div>
             <div id="todayHappenedSuggestions" class="disruption-suggestions"></div>
             <div class="disruption-form-row">
-              <input type="text" id="todayHappenedCause" placeholder="e.g. Community group, travel, sick, Sabbath..." maxlength="120" aria-label="What happened today" />
-              <button id="todayHappenedLogBtn">Log it</button>
+              <input type="text" id="todayHappenedCause" placeholder="New tag — tired, stressed, travel, Sabbath…" maxlength="120" aria-label="What was going on today" />
+              <button id="todayHappenedLogBtn">Save</button>
             </div>
-            <div id="todayHappenedList" class="disruption-today-list"></div>
           </div>
-        </div>
-
-        <div class="panel" id="todayConsumptionPanel">
-          <div class="panel-heading-row">
-            <h2>Consumption check-in <span class="hint">did I overdo it today?</span></h2>
-          </div>
-          <div id="todayConsumption"></div>
+          <div class="checkin-section" id="todayCheckinPatterns"></div>
         </div>
       </section>
 
