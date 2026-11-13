@@ -561,7 +561,8 @@ document.getElementById("mealAddForm").addEventListener("submit", async (e) => {
   const urlRaw = document.getElementById("mealUrl").value.trim();
   const paste = document.getElementById("mealPaste").value.trim();
   const title = document.getElementById("mealTitle").value.trim();
-  const date = document.getElementById("mealDate").value;
+  const noDate = document.getElementById("mealNoDate").checked;
+  const date = noDate ? "" : document.getElementById("mealDate").value;
 
   const key = urlRaw ? mealsNormalizeUrl(urlRaw) : null;
   if (urlRaw && !key) { alert("That link doesn't look right."); return; }
@@ -626,3 +627,21 @@ document.getElementById("mealsThisWeekBtn").addEventListener("click", () => {
   renderMeals();
 });
 document.getElementById("mealDate").value = todayLocalStr();
+
+// "No day" saves the recipe to the Recipe Box without putting it on the plan.
+function syncMealNoDate() {
+  const off = document.getElementById("mealNoDate").checked;
+  const dateInput = document.getElementById("mealDate");
+  if (!off && !dateInput.value) dateInput.value = todayLocalStr();
+  dateInput.disabled = off;
+  dateInput.closest(".meal-date-label").classList.toggle("is-off", off);
+  document.getElementById("mealAddBtn").textContent = off ? "Save" : "Add";
+}
+document.getElementById("mealNoDate").addEventListener("change", syncMealNoDate);
+document.getElementById("mealDate").addEventListener("input", () => {
+  // Clearing the date by hand means the same thing as ticking "No day".
+  if (!document.getElementById("mealDate").value) {
+    document.getElementById("mealNoDate").checked = true;
+    syncMealNoDate();
+  }
+});

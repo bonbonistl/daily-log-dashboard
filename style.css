@@ -2111,6 +2111,9 @@ header .controls { grid-row: 3; grid-column: 1 / -1; flex-wrap: wrap; }
 .meal-add-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .meal-add-row #mealTitle { flex: 1; min-width: 180px; }
 .meal-date-label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.meal-date-label.is-off { opacity: 0.45; }
+.meal-nodate-label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
+.meal-add-form .meal-nodate-label input { padding: 0; margin: 0; width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
 .meal-add-row button {
   background: var(--accent);
   border: none;
