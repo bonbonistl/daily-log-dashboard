@@ -2167,6 +2167,43 @@ header .controls { grid-row: 3; grid-column: 1 / -1; flex-wrap: wrap; }
 .meal-item-title a { color: var(--text); text-decoration-color: var(--panel-border); text-underline-offset: 2px; }
 .meal-item-title a:hover { color: var(--accent); }
 .meal-item.done .meal-item-title { color: var(--muted); }
+.meal-have { display: flex; gap: 3px; margin-top: 5px; flex-wrap: wrap; }
+.meal-have-btn {
+  background: none;
+  border: 1px solid var(--panel-border);
+  color: var(--muted);
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.meal-have-btn:hover { color: var(--text); }
+.meal-have-btn.yes.on { background: var(--accent); border-color: var(--accent); color: #ffffff; }
+.meal-have-btn.no.on { background: #f5a524; border-color: #f5a524; color: #3a2600; }
+.meal-missing {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 5px;
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+}
+.meals-shop-summary {
+  font-size: 13px;
+  margin: 0 0 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid #f5a52466;
+  background: #f5a5241a;
+  overflow-wrap: anywhere;
+}
 .meal-recipe-text { margin-top: 4px; font-size: 12px; }
 .meal-recipe-text summary { color: var(--accent); cursor: pointer; }
 .meal-recipe-text div {

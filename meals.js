@@ -188,6 +188,7 @@ function renderMealsWeek() {
           <div class="meal-item-body">
             <div class="meal-item-title">${mealsRecipeTitleHtml(r)}</div>
             ${by}
+            ${p.cooked_at ? "" : mealsHaveHtml(p)}
             ${mealsRecipeTextHtml(r)}
           </div>
           <button class="plan-item-remove meal-plan-remove" aria-label="Remove from this day" title="Remove from this day">&times;</button>
@@ -206,6 +207,14 @@ function renderMealsWeek() {
   document.querySelectorAll("#mealsWeek .meal-cooked-toggle").forEach((input) => {
     input.addEventListener("change", () => toggleMealCooked(Number(input.closest(".meal-item").dataset.id), input));
   });
+  document.querySelectorAll("#mealsWeek .meal-have-btn").forEach((btn) => {
+    btn.addEventListener("click", () => setMealHave(Number(btn.closest(".meal-item").dataset.id), btn.dataset.v === "true"));
+  });
+  document.querySelectorAll("#mealsWeek .meal-missing").forEach((input) => {
+    input.addEventListener("change", () => saveMealMissing(Number(input.closest(".meal-item").dataset.id), input));
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
+  });
+  renderMealsShopSummary(days);
   document.querySelectorAll("#mealsWeek .meal-plan-remove").forEach((btn) => {
     btn.addEventListener("click", () => removeMealPlan(Number(btn.closest(".meal-item").dataset.id)));
   });
@@ -217,6 +226,62 @@ function renderMealsWeek() {
       document.getElementById("mealUrl").focus({ preventScroll: true });
     });
   });
+}
+
+// ---------- do we have what we need? ----------
+// has_ingredients: null = not checked yet, true = have everything, false = need to shop.
+function mealsHaveHtml(p) {
+  const v = p.has_ingredients;
+  const missing = v === false
+    ? `<input type="text" class="meal-missing" maxlength="500" placeholder="What do you need? (e.g. limes, cilantro)" value="${escapeHtml(p.missing_items || "")}" />`
+    : "";
+  return `
+    <div class="meal-have" role="group" aria-label="Do you have the ingredients?">
+      <button type="button" class="meal-have-btn yes ${v === true ? "on" : ""}" data-v="true" aria-pressed="${v === true}" title="I have everything for this">✓ Have</button>
+      <button type="button" class="meal-have-btn no ${v === false ? "on" : ""}" data-v="false" aria-pressed="${v === false}" title="I need to buy things for this">🛒 Need</button>
+    </div>
+    ${missing}`;
+}
+
+async function setMealHave(planId, value) {
+  const p = mealsPlan.find((x) => x.id === planId);
+  if (!p) return;
+  // Clicking the button that's already on clears it back to "not checked yet".
+  const next = p.has_ingredients === value ? null : value;
+  const { error } = await sb.from("meal_plan").update({ has_ingredients: next }).eq("id", planId);
+  if (error) { alert("Failed to update: " + error.message); return; }
+  p.has_ingredients = next;
+  renderMeals();
+  if (next === false) {
+    const input = document.querySelector(`#mealsWeek .meal-item[data-id="${planId}"] .meal-missing`);
+    if (input && !input.value) input.focus();
+  }
+}
+
+async function saveMealMissing(planId, input) {
+  const p = mealsPlan.find((x) => x.id === planId);
+  if (!p) return;
+  const val = input.value.trim() || null;
+  if (val === (p.missing_items || null)) return;
+  const { error } = await sb.from("meal_plan").update({ missing_items: val }).eq("id", planId);
+  if (error) { alert("Failed to save: " + error.message); input.value = p.missing_items || ""; return; }
+  p.missing_items = val;
+  renderMealsShopSummary();
+}
+
+// One line above the week: which planned (not yet cooked) meals still need shopping.
+function renderMealsShopSummary(days) {
+  if (!days) {
+    days = [];
+    for (let i = 0; i < 7; i++) { const d = new Date(mealsWeekStart); d.setDate(d.getDate() + i); days.push(toLocalDateStr(d)); }
+  }
+  const el = document.getElementById("mealsShopSummary");
+  const need = mealsPlan.filter((p) => days.includes(p.plan_date) && !p.cooked_at && p.has_ingredients === false);
+  if (!need.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+  const items = need.map((p) => p.missing_items).filter(Boolean);
+  el.innerHTML = `🛒&nbsp; <strong>${need.length} meal${need.length === 1 ? "" : "s"}</strong> still need${need.length === 1 ? "s" : ""} shopping`
+    + (items.length ? `: ${items.map(escapeHtml).join(", ")}` : "");
+  el.classList.remove("hidden");
 }
 
 async function toggleMealCooked(planId, input) {
@@ -638,6 +703,7 @@ function syncMealNoDate() {
   document.getElementById("mealAddBtn").textContent = off ? "Save" : "Add";
 }
 document.getElementById("mealNoDate").addEventListener("change", syncMealNoDate);
+syncMealNoDate(); // browsers can restore the checkbox's state on reload
 document.getElementById("mealDate").addEventListener("input", () => {
   // Clearing the date by hand means the same thing as ticking "No day".
   if (!document.getElementById("mealDate").value) {
