@@ -2161,6 +2161,35 @@ header .controls { grid-row: 3; grid-column: 1 / -1; flex-wrap: wrap; }
   cursor: pointer;
 }
 .meal-item { align-items: flex-start; }
+/* Drag a meal to another day by its grip. */
+.meal-drag-handle {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  margin: 0 -4px 0 -6px;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.2;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 0.6;
+}
+.meal-drag-handle:hover, .meal-drag-handle:focus-visible { opacity: 1; color: var(--text); }
+.meal-item.meal-dragging { opacity: 0.35; }
+.meal-drag-ghost {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  pointer-events: none;
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  transform: rotate(1.5deg);
+}
+.meals-day.drop-target { border-color: var(--accent); background: rgba(15, 118, 110, 0.08); }
+body.meal-drag-active, body.meal-drag-active * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
 .meal-item label { flex: 0 0 auto; padding-top: 1px; }
 .meal-item-body { flex: 1; min-width: 0; }
 .meal-item-title { font-size: 14px; overflow-wrap: anywhere; }

@@ -185,6 +185,7 @@ function renderMealsWeek() {
       const by = p.cooked_at && p.cooked_by ? `<span class="plan-item-macro">cooked by ${escapeHtml(mealsWho(p.cooked_by))}</span>` : "";
       return `
         <div class="plan-item meal-item ${p.cooked_at ? "done" : ""}" data-id="${p.id}">
+          <button type="button" class="meal-drag-handle" title="Drag to another day (or focus and use ← →)" aria-label="Move ${escapeHtml(r.title)} to another day">⠿</button>
           <label>
             <input type="checkbox" class="meal-cooked-toggle" ${p.cooked_at ? "checked" : ""} title="Cooked" />
           </label>
@@ -198,7 +199,7 @@ function renderMealsWeek() {
         </div>`;
     }).join("");
     return `
-      <div class="meals-day ${ds === today ? "today" : ""}">
+      <div class="meals-day ${ds === today ? "today" : ""}" data-date="${ds}">
         <div class="meals-day-head">
           <h3>${escapeHtml(mealsFmtDate(ds))}</h3>
           <button class="meals-day-add" data-date="${ds}" title="Add a meal to this day">+ Add</button>
@@ -229,6 +230,131 @@ function renderMealsWeek() {
       document.getElementById("mealUrl").focus({ preventScroll: true });
     });
   });
+  document.querySelectorAll("#mealsWeek .meal-drag-handle").forEach((handle) => {
+    handle.addEventListener("pointerdown", (e) => mealsDragStart(e, handle));
+    handle.addEventListener("keydown", (e) => mealsDragKey(e, handle));
+  });
+}
+
+// ---------- move a meal to another day ----------
+// Drag by the ⠿ grip. Pointer events rather than HTML5 drag-and-drop so it works on
+// phones too (the grip has touch-action: none, so dragging it doesn't scroll the page).
+// With the grip focused, ←/↑ and →/↓ move the meal a day within the week.
+let mealsDrag = null;
+
+function mealsDragStart(e, handle) {
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  if (mealsDrag) return;
+  const item = handle.closest(".meal-item");
+  const day = item.closest(".meals-day");
+  e.preventDefault();
+  const rect = item.getBoundingClientRect();
+  const ghost = item.cloneNode(true);
+  ghost.classList.add("meal-drag-ghost");
+  ghost.removeAttribute("data-id");
+  ghost.style.width = rect.width + "px";
+  document.body.appendChild(ghost);
+  item.classList.add("meal-dragging");
+  document.body.classList.add("meal-drag-active");
+  mealsDrag = {
+    planId: Number(item.dataset.id), item, ghost, handle,
+    from: day.dataset.date, over: null,
+    dx: e.clientX - rect.left, dy: e.clientY - rect.top,
+    x: e.clientX, y: e.clientY, raf: 0,
+  };
+  try { handle.setPointerCapture(e.pointerId); } catch (_) { /* fine without it */ }
+  handle.addEventListener("pointermove", mealsDragMove);
+  handle.addEventListener("pointerup", mealsDragEnd);
+  handle.addEventListener("pointercancel", mealsDragCancel);
+  document.addEventListener("keydown", mealsDragEscape);
+  window.addEventListener("scroll", mealsDragPosition, { passive: true });
+  mealsDragPosition();
+  mealsDrag.raf = requestAnimationFrame(mealsDragAutoScroll);
+}
+
+function mealsDragMove(e) {
+  if (!mealsDrag) return;
+  mealsDrag.x = e.clientX;
+  mealsDrag.y = e.clientY;
+  mealsDragPosition();
+}
+
+// Move the floating copy under the pointer and highlight the day it's over.
+function mealsDragPosition() {
+  const d = mealsDrag;
+  if (!d) return;
+  d.ghost.style.left = (d.x - d.dx) + "px";
+  d.ghost.style.top = (d.y - d.dy) + "px";
+  const under = document.elementFromPoint(d.x, d.y);
+  const day = under && under.closest("#mealsWeek .meals-day");
+  const over = day ? day.dataset.date : null;
+  if (over === d.over) return;
+  document.querySelectorAll("#mealsWeek .meals-day.drop-target").forEach((el) => el.classList.remove("drop-target"));
+  if (day && over !== d.from) day.classList.add("drop-target");
+  d.over = over;
+}
+
+// Days stack on narrow screens, so scroll when dragging near the top/bottom edge.
+function mealsDragAutoScroll() {
+  if (!mealsDrag) return;
+  const edge = 70, h = window.innerHeight, y = mealsDrag.y;
+  let dy = 0;
+  if (y < edge) dy = -Math.ceil((edge - y) / 5);
+  else if (y > h - edge) dy = Math.ceil((y - (h - edge)) / 5);
+  if (dy) { window.scrollBy(0, dy); mealsDragPosition(); }
+  mealsDrag.raf = requestAnimationFrame(mealsDragAutoScroll);
+}
+
+function mealsDragCleanup() {
+  const d = mealsDrag;
+  if (!d) return null;
+  mealsDrag = null;
+  cancelAnimationFrame(d.raf);
+  d.handle.removeEventListener("pointermove", mealsDragMove);
+  d.handle.removeEventListener("pointerup", mealsDragEnd);
+  d.handle.removeEventListener("pointercancel", mealsDragCancel);
+  document.removeEventListener("keydown", mealsDragEscape);
+  window.removeEventListener("scroll", mealsDragPosition);
+  d.ghost.remove();
+  d.item.classList.remove("meal-dragging");
+  document.body.classList.remove("meal-drag-active");
+  document.querySelectorAll("#mealsWeek .meals-day.drop-target").forEach((el) => el.classList.remove("drop-target"));
+  return d;
+}
+
+function mealsDragEnd() {
+  const d = mealsDragCleanup();
+  if (d && d.over && d.over !== d.from) moveMealPlan(d.planId, d.over);
+}
+function mealsDragCancel() { mealsDragCleanup(); }
+function mealsDragEscape(e) { if (e.key === "Escape") mealsDragCleanup(); }
+
+async function mealsDragKey(e, handle) {
+  const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
+  if (!step) return;
+  e.preventDefault();
+  const days = [...document.querySelectorAll("#mealsWeek .meals-day")].map((el) => el.dataset.date);
+  const from = handle.closest(".meals-day").dataset.date;
+  const to = days[days.indexOf(from) + step];
+  if (!to) return;
+  const planId = Number(handle.closest(".meal-item").dataset.id);
+  await moveMealPlan(planId, to);
+  const moved = document.querySelector(`#mealsWeek .meal-item[data-id="${planId}"] .meal-drag-handle`);
+  if (moved) moved.focus();
+}
+
+async function moveMealPlan(planId, date) {
+  const p = mealsPlan.find((x) => x.id === planId);
+  if (!p || p.plan_date === date) return;
+  const prev = p.plan_date;
+  p.plan_date = date; // show it on the new day right away
+  renderMeals();
+  const { error } = await sb.from("meal_plan").update({ plan_date: date }).eq("id", planId);
+  if (error) {
+    p.plan_date = prev;
+    renderMeals();
+    alert("Failed to move: " + error.message);
+  }
 }
 
 // ---------- shopping status ----------
