@@ -177,12 +177,21 @@ function renderMealsWeek() {
     days.push(toLocalDateStr(d));
   }
 
+  const dinners = mealsCalDinners(days); // null until the calendar has loaded (or none connected)
   document.getElementById("mealsWeek").innerHTML = days.map((ds) => {
     const items = mealsPlan.filter((p) => p.plan_date === ds).sort((a, b) => a.id - b.id);
+    const dayDinners = dinners ? (dinners[ds] || []) : null;
+    const matched = new Set();
     const itemsHtml = items.map((p) => {
       const r = mealsRecipes.find((x) => x.id === p.recipe_id);
       if (!r) return "";
       const by = p.cooked_at && p.cooked_by ? `<span class="plan-item-macro">cooked by ${escapeHtml(mealsWho(p.cooked_by))}</span>` : "";
+      let cal = "";
+      if (dayDinners) {
+        const hit = mealsCalMatch(r, dayDinners);
+        if (hit) matched.add(hit);
+        cal = mealsCalHtml(hit);
+      }
       return `
         <div class="plan-item meal-item ${p.cooked_at ? "done" : ""}" data-id="${p.id}">
           <button type="button" class="meal-drag-handle" title="Drag to another day (or focus and use ← →)" aria-label="Move ${escapeHtml(r.title)} to another day">⠿</button>
@@ -192,18 +201,25 @@ function renderMealsWeek() {
           <div class="meal-item-body">
             <div class="meal-item-title">${mealsRecipeTitleHtml(r)}</div>
             ${by}
+            ${cal}
             ${p.cooked_at ? (p.cook_note ? `<div class="meal-cook-note">${escapeHtml(p.cook_note)}</div>` : "") : mealsHaveHtml(p)}
             ${mealsRecipeTextHtml(r)}
           </div>
           <button class="plan-item-remove meal-plan-remove" aria-label="Remove from this day" title="Remove from this day">&times;</button>
         </div>`;
     }).join("");
+    // A "Dinner: …" on the calendar that doesn't match anything planned here.
+    const extra = (dayDinners || []).filter((d) => !matched.has(d));
+    const extraHtml = extra.length
+      ? `<div class="meals-cal-extra" title="On the ${escapeHtml(extra[0].cal)} calendar but not planned here">📅 Calendar says: ${extra.map((d) => escapeHtml(d.meal)).join(", ")}</div>`
+      : "";
     return `
       <div class="meals-day ${ds === today ? "today" : ""}" data-date="${ds}">
         <div class="meals-day-head">
           <h3>${escapeHtml(mealsFmtDate(ds))}</h3>
           <button class="meals-day-add" data-date="${ds}" title="Add a meal to this day">+ Add</button>
         </div>
+        ${extraHtml}
         <div class="rol-checklist">${itemsHtml || `<div class="journal-empty">Nothing planned.</div>`}</div>
       </div>`;
   }).join("");
@@ -234,6 +250,77 @@ function renderMealsWeek() {
     handle.addEventListener("pointerdown", (e) => mealsDragStart(e, handle));
     handle.addEventListener("keydown", (e) => mealsDragKey(e, handle));
   });
+}
+
+// ---------- on the calendar? ----------
+// Dinners go on the family Google Calendar ("Kids Calendar" in Google; whatever name it has
+// in Settings) as "Dinner: <meal>". Each planned meal gets a check when a matching dinner
+// event is on the same day. Read-only — it's checked by putting the event on the calendar.
+// Uses the calendars connected in Settings (per person) and the helpers in today.js.
+let mealsCalFeeds = null;    // { sig, fetchedAt, feeds: [{ name, text }] }
+let mealsCalInflight = null;
+let mealsCalWeek = null;     // { key, fetchedAt, dinners: { "YYYY-MM-DD": [{ title, meal, norm, cal }] } }
+
+function mealsCalNorm(s) {
+  return (s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function mealsCalLoad() {
+  if (mealsCalInflight) return;
+  mealsCalInflight = loadUserSettings().then(async () => {
+    const cals = calendarSettings();
+    const feeds = [];
+    await Promise.all(cals.map(async (c) => {
+      try { feeds.push({ name: c.name, text: await fetchCalendarFeed(c.url) }); }
+      catch (err) { console.warn(`Calendar "${c.name}" failed`, err); }
+    }));
+    mealsCalFeeds = { sig: cals.map((c) => c.url).join("|"), fetchedAt: Date.now(), feeds };
+  })
+    .catch((err) => console.warn("Meals calendar load failed", err))
+    .finally(() => { mealsCalInflight = null; if (mealsCalFeeds) renderMealsWeek(); });
+}
+
+// "Dinner: …" events by day for the week shown, or null while loading / if no calendar.
+function mealsCalDinners(days) {
+  const sig = calendarSettings().map((c) => c.url).join("|");
+  const fresh = mealsCalFeeds && mealsCalFeeds.sig === sig && Date.now() - mealsCalFeeds.fetchedAt < CALENDAR_TTL_MS;
+  if (!fresh) mealsCalLoad();
+  if (!mealsCalFeeds || !mealsCalFeeds.feeds.length || mealsCalFeeds.sig !== sig) return null;
+  const key = days[0];
+  if (mealsCalWeek && mealsCalWeek.key === key && mealsCalWeek.fetchedAt === mealsCalFeeds.fetchedAt) return mealsCalWeek.dinners;
+  const start = new Date(days[0] + "T00:00:00");
+  const end = new Date(start); end.setDate(end.getDate() + 7);
+  const dinners = {};
+  mealsCalFeeds.feeds.forEach((f) => {
+    let events = [];
+    try { events = calendarEventsForDay(f.text, f.name, start, end); }
+    catch (err) { console.warn(`Calendar "${f.name}" couldn't be read`, err); }
+    events.forEach((e) => {
+      const m = /^\s*dinner\s*:\s*(.*)$/i.exec(e.title);
+      if (!m || !m[1].trim()) return;
+      const ds = toLocalDateStr(e.start);
+      (dinners[ds] = dinners[ds] || []).push({ title: e.title, meal: m[1].trim(), norm: mealsCalNorm(m[1]), cal: e.cal });
+    });
+  });
+  mealsCalWeek = { key, fetchedAt: mealsCalFeeds.fetchedAt, dinners };
+  return dinners;
+}
+
+// Same name, ignoring case/punctuation — or one name contains the other
+// ("Enchiladas" ↔ "Dinner: Enchiladas/Quesadillas").
+function mealsCalMatch(r, dayDinners) {
+  const t = mealsCalNorm(r.title);
+  if (!t) return null;
+  return dayDinners.find((d) => d.norm === t)
+    || dayDinners.find((d) => (t.length >= 4 && d.norm.includes(t)) || (d.norm.length >= 4 && t.includes(d.norm)))
+    || null;
+}
+
+function mealsCalHtml(hit) {
+  return hit
+    ? `<div class="meal-cal on" title="${escapeHtml(`“${hit.title}” is on the ${hit.cal} calendar`)}"><span class="meal-cal-box" aria-hidden="true">✓</span> On calendar</div>`
+    : `<div class="meal-cal" title="No matching “Dinner: …” event on this day yet"><span class="meal-cal-box" aria-hidden="true"></span> Not on calendar</div>`;
 }
 
 // ---------- move a meal to another day ----------

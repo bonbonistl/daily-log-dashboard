@@ -2190,6 +2190,24 @@ header .controls { grid-row: 3; grid-column: 1 / -1; flex-wrap: wrap; }
 }
 .meals-day.drop-target { border-color: var(--accent); background: rgba(15, 118, 110, 0.08); }
 body.meal-drag-active, body.meal-drag-active * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+/* Is this meal's "Dinner: …" on the Google Calendar? (read-only, from the calendar feed) */
+.meal-cal { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); margin-top: 4px; cursor: default; }
+.meal-cal-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  font-size: 9px;
+  line-height: 1;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+.meal-cal.on { color: var(--accent); }
+.meal-cal.on .meal-cal-box { background: var(--accent); border-color: var(--accent); }
+.meals-cal-extra { font-size: 11px; color: var(--muted); margin: -2px 0 8px; overflow-wrap: anywhere; }
 .meal-item label { flex: 0 0 auto; padding-top: 1px; }
 .meal-item-body { flex: 1; min-width: 0; }
 .meal-item-title { font-size: 14px; overflow-wrap: anywhere; }
