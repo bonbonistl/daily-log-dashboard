@@ -2130,19 +2130,34 @@ header .controls { grid-row: 3; grid-column: 1 / -1; flex-wrap: wrap; }
 .meal-form-help { font-size: 12px; color: var(--muted); margin: 0; }
 
 .meal-week-nav { margin: 0; flex-wrap: wrap; }
+/* One row per day: the day on the left, its meals as cards across the row (they wrap
+   to more lines on a busy day). On phones the day name sits above its meals. */
 .meals-week {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .meals-day {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   padding: 10px 12px;
   min-width: 0;
 }
 .meals-day.today { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
-.meals-day-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+.meals-day-head { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-top: 2px; }
+.meals-day-body { min-width: 0; }
+.meals-day-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 8px; }
+.meals-day-list > .journal-empty { grid-column: 1 / -1; padding: 2px 0; }
+.meals-day-list .meal-item { min-width: 0; }
+@media (max-width: 640px) {
+  .meals-day { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .meals-day-head { flex-direction: row; justify-content: space-between; align-items: center; padding-top: 0; }
+  .meals-day-list { grid-template-columns: minmax(0, 1fr); }
+}
 .meals-day-head h3 {
   margin: 0;
   font-size: 13px;
@@ -2207,7 +2222,7 @@ body.meal-drag-active, body.meal-drag-active * { cursor: grabbing !important; us
 }
 .meal-cal.on { color: var(--accent); }
 .meal-cal.on .meal-cal-box { background: var(--accent); border-color: var(--accent); }
-.meals-cal-extra { font-size: 11px; color: var(--muted); margin: -2px 0 8px; overflow-wrap: anywhere; }
+.meals-cal-extra { font-size: 11px; color: var(--muted); margin: 2px 0 6px; overflow-wrap: anywhere; }
 .meal-item label { flex: 0 0 auto; padding-top: 1px; }
 .meal-item-body { flex: 1; min-width: 0; }
 .meal-item-title { font-size: 14px; overflow-wrap: anywhere; }

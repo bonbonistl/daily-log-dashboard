@@ -219,8 +219,10 @@ function renderMealsWeek() {
           <h3>${escapeHtml(mealsFmtDate(ds))}</h3>
           <button class="meals-day-add" data-date="${ds}" title="Add a meal to this day">+ Add</button>
         </div>
-        ${extraHtml}
-        <div class="rol-checklist">${itemsHtml || `<div class="journal-empty">Nothing planned.</div>`}</div>
+        <div class="meals-day-body">
+          ${extraHtml}
+          <div class="rol-checklist meals-day-list">${itemsHtml || `<div class="journal-empty">Nothing planned.</div>`}</div>
+        </div>
       </div>`;
   }).join("");
 
