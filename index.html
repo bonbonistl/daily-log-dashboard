@@ -100,7 +100,7 @@
               <button id="mealsNextWeekBtn">Next week ›</button>
             </div>
           </div>
-          <p class="hint drawer-hint">Check a meal off once you've cooked it — that's what goes into the history. Mark each meal “Have” or “Need” to keep track of what you still have to buy.</p>
+          <p class="hint drawer-hint">Check a meal off once you've cooked it — that's what goes into the history. Mark each meal “Need”, “In cart” or “Have” to keep track of shopping. Click a recipe's name to see its history and notes.</p>
           <div id="mealsShopSummary" class="meals-shop-summary hidden"></div>
           <div id="mealsWeek" class="meals-week"></div>
         </section>
@@ -733,6 +733,49 @@
     </form>
     <div class="detail-form-section">
       <button type="button" id="openingRemoveBtn" class="detail-form-danger-btn">Remove this opening</button>
+    </div>
+  </aside>
+
+  <div id="recipeBackdrop" class="journal-backdrop"></div>
+  <aside id="recipeDrawer" class="journal-drawer" aria-labelledby="recipeDrawerTitle">
+    <div class="journal-header">
+      <div>
+        <h2 id="recipeDrawerTitle">Recipe</h2>
+        <div id="recipeDrawerSubtitle" class="journal-subtitle"></div>
+      </div>
+      <button id="recipeDrawerCloseBtn" class="drawer-close-btn" aria-label="Close">&times;</button>
+    </div>
+    <div id="recipeDrawerLink" class="recipe-drawer-link"></div>
+    <div id="recipeDrawerText"></div>
+
+    <div class="detail-form-section">
+      <h3>Notes</h3>
+      <textarea id="recipeNotes" class="recipe-notes" rows="5" maxlength="20000" placeholder="Tweaks, swaps, what everyone thought, how much it makes…"></textarea>
+      <div id="recipeNotesStatus" class="hint recipe-notes-status"></div>
+    </div>
+
+    <div class="detail-form-section">
+      <h3>Cooked <span id="recipeCookCount" class="hint"></span></h3>
+      <form id="recipeLogCookForm" class="recipe-log-form">
+        <input type="date" id="recipeLogDate" aria-label="Day it was cooked" required />
+        <input type="text" id="recipeLogNote" maxlength="2000" placeholder="Note for this time (optional)" />
+        <button type="submit">Log it</button>
+      </form>
+      <div id="recipeCookHistory" class="recipe-cook-history"></div>
+    </div>
+
+    <div class="detail-form-section">
+      <h3>Planned</h3>
+      <div id="recipeUpcoming" class="recipe-upcoming"></div>
+      <form id="recipePlanForm" class="recipe-log-form">
+        <input type="date" id="recipePlanDate" aria-label="Day to plan" required />
+        <button type="submit">Plan it</button>
+      </form>
+    </div>
+
+    <div class="detail-form-section recipe-drawer-manage">
+      <button type="button" id="recipeRenameBtn">Rename</button>
+      <button type="button" id="recipeDeleteBtn" class="detail-form-danger-btn">Delete recipe</button>
     </div>
   </aside>
 

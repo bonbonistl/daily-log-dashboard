@@ -3,7 +3,7 @@
 // cooked_at set is a "cooked" entry — those rows are the cooking history.
 
 let mealsRecipes = [];   // [{id, title, url, url_key, source_text, notes, created_by, created_at}]
-let mealsPlan = [];      // [{id, recipe_id, plan_date, cooked_at, cooked_by, created_by}]
+let mealsPlan = [];      // [{id, recipe_id, plan_date, cooked_at, cooked_by, shop_status, missing_items, cook_note, created_by}]
 let mealsWeekStart = mealsMonday(new Date());
 let mealsTitleTouched = false; // stop auto-filling the title once it's been typed in
 let mealsSelectedRecipeId = null; // set when a saved recipe is picked from the name dropdown
@@ -143,15 +143,18 @@ function renderMeals() {
   renderMealsHistory();
   renderMealsRecipes();
   updateMealMatchHint();
+  renderRecipeDrawer();
 }
 
 // ---------- shared bits ----------
+// The name opens the recipe's side pane (history + notes); ↗ goes straight to the link.
 function mealsRecipeTitleHtml(r) {
-  const title = escapeHtml(r.title);
   const u = r.url && mealsParseUrl(r.url);
-  return u
-    ? `<a href="${escapeHtml(u.href)}" target="_blank" rel="noopener noreferrer">${title}</a>`
-    : title;
+  const link = u
+    ? ` <a class="meal-ext-link" href="${escapeHtml(u.href)}" target="_blank" rel="noopener noreferrer" title="Open the recipe" aria-label="Open the recipe">↗</a>`
+    : "";
+  const note = r.notes ? ` <span class="meal-has-notes" title="Has notes">📝</span>` : "";
+  return `<button type="button" class="meal-open-recipe" data-recipe-id="${r.id}">${escapeHtml(r.title)}</button>${note}${link}`;
 }
 function mealsRecipeTextHtml(r) {
   if (!r.source_text) return "";
@@ -188,7 +191,7 @@ function renderMealsWeek() {
           <div class="meal-item-body">
             <div class="meal-item-title">${mealsRecipeTitleHtml(r)}</div>
             ${by}
-            ${p.cooked_at ? "" : mealsHaveHtml(p)}
+            ${p.cooked_at ? (p.cook_note ? `<div class="meal-cook-note">${escapeHtml(p.cook_note)}</div>` : "") : mealsHaveHtml(p)}
             ${mealsRecipeTextHtml(r)}
           </div>
           <button class="plan-item-remove meal-plan-remove" aria-label="Remove from this day" title="Remove from this day">&times;</button>
@@ -208,7 +211,7 @@ function renderMealsWeek() {
     input.addEventListener("change", () => toggleMealCooked(Number(input.closest(".meal-item").dataset.id), input));
   });
   document.querySelectorAll("#mealsWeek .meal-have-btn").forEach((btn) => {
-    btn.addEventListener("click", () => setMealHave(Number(btn.closest(".meal-item").dataset.id), btn.dataset.v === "true"));
+    btn.addEventListener("click", () => setMealHave(Number(btn.closest(".meal-item").dataset.id), btn.dataset.v));
   });
   document.querySelectorAll("#mealsWeek .meal-missing").forEach((input) => {
     input.addEventListener("change", () => saveMealMissing(Number(input.closest(".meal-item").dataset.id), input));
@@ -228,17 +231,23 @@ function renderMealsWeek() {
   });
 }
 
-// ---------- do we have what we need? ----------
-// has_ingredients: null = not checked yet, true = have everything, false = need to shop.
+// ---------- shopping status ----------
+// shop_status: null = not checked yet, 'need' = have to shop, 'in_cart' = shopped/ordered
+// (on its way), 'have' = have everything.
+const MEALS_SHOP_STATES = [
+  { v: "need", label: "Need", title: "I need to buy things for this" },
+  { v: "in_cart", label: "In cart", title: "What I need is in the cart / ordered" },
+  { v: "have", label: "Have ✓", title: "I have everything for this" },
+];
+
 function mealsHaveHtml(p) {
-  const v = p.has_ingredients;
-  const missing = v === false
+  const v = p.shop_status;
+  const missing = v === "need" || v === "in_cart"
     ? `<input type="text" class="meal-missing" maxlength="500" placeholder="What do you need? (e.g. limes, cilantro)" value="${escapeHtml(p.missing_items || "")}" />`
     : "";
   return `
-    <div class="meal-have" role="group" aria-label="Do you have the ingredients?">
-      <button type="button" class="meal-have-btn yes ${v === true ? "on" : ""}" data-v="true" aria-pressed="${v === true}" title="I have everything for this">✓ Have</button>
-      <button type="button" class="meal-have-btn no ${v === false ? "on" : ""}" data-v="false" aria-pressed="${v === false}" title="I need to buy things for this">🛒 Need</button>
+    <div class="meal-have" role="group" aria-label="Shopping status">
+      ${MEALS_SHOP_STATES.map((st) => `<button type="button" class="meal-have-btn ${st.v} ${v === st.v ? "on" : ""}" data-v="${st.v}" aria-pressed="${v === st.v}" title="${st.title}">${st.label}</button>`).join("")}
     </div>
     ${missing}`;
 }
@@ -247,12 +256,12 @@ async function setMealHave(planId, value) {
   const p = mealsPlan.find((x) => x.id === planId);
   if (!p) return;
   // Clicking the button that's already on clears it back to "not checked yet".
-  const next = p.has_ingredients === value ? null : value;
-  const { error } = await sb.from("meal_plan").update({ has_ingredients: next }).eq("id", planId);
+  const next = p.shop_status === value ? null : value;
+  const { error } = await sb.from("meal_plan").update({ shop_status: next }).eq("id", planId);
   if (error) { alert("Failed to update: " + error.message); return; }
-  p.has_ingredients = next;
+  p.shop_status = next;
   renderMeals();
-  if (next === false) {
+  if (next === "need") {
     const input = document.querySelector(`#mealsWeek .meal-item[data-id="${planId}"] .meal-missing`);
     if (input && !input.value) input.focus();
   }
@@ -276,11 +285,21 @@ function renderMealsShopSummary(days) {
     for (let i = 0; i < 7; i++) { const d = new Date(mealsWeekStart); d.setDate(d.getDate() + i); days.push(toLocalDateStr(d)); }
   }
   const el = document.getElementById("mealsShopSummary");
-  const need = mealsPlan.filter((p) => days.includes(p.plan_date) && !p.cooked_at && p.has_ingredients === false);
-  if (!need.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
-  const items = need.map((p) => p.missing_items).filter(Boolean);
-  el.innerHTML = `🛒&nbsp; <strong>${need.length} meal${need.length === 1 ? "" : "s"}</strong> still need${need.length === 1 ? "s" : ""} shopping`
-    + (items.length ? `: ${items.map(escapeHtml).join(", ")}` : "");
+  const open = mealsPlan.filter((p) => days.includes(p.plan_date) && !p.cooked_at);
+  const need = open.filter((p) => p.shop_status === "need");
+  const inCart = open.filter((p) => p.shop_status === "in_cart");
+  if (!need.length && !inCart.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+  const lines = [];
+  if (need.length) {
+    const items = need.map((p) => p.missing_items).filter(Boolean);
+    lines.push(`🛒&nbsp; <strong>${need.length} meal${need.length === 1 ? "" : "s"}</strong> still need${need.length === 1 ? "s" : ""} shopping`
+      + (items.length ? `: ${items.map(escapeHtml).join(", ")}` : ""));
+  }
+  if (inCart.length) {
+    lines.push(`🛍️&nbsp; <strong>${inCart.length}</strong> in the cart`);
+  }
+  el.innerHTML = lines.map((l) => `<div>${l}</div>`).join("");
+  el.classList.toggle("all-in-cart", !need.length);
   el.classList.remove("hidden");
 }
 
@@ -329,7 +348,7 @@ function renderMealsHistory() {
     return `${head}
       <div class="meals-history-row">
         <span class="meals-history-date">${escapeHtml(mealsFmtDate(p.plan_date))}</span>
-        <span class="meals-history-title">${mealsRecipeTitleHtml(r)}${n > 1 ? ` <span class="hint">${n}×</span>` : ""}</span>
+        <span class="meals-history-title">${mealsRecipeTitleHtml(r)}${n > 1 ? ` <span class="hint">${n}×</span>` : ""}${p.cook_note ? `<span class="meal-cook-note">${escapeHtml(p.cook_note)}</span>` : ""}</span>
         <span class="hint">${escapeHtml(mealsWho(p.cooked_by))}</span>
       </div>`;
   }).join("");
@@ -353,7 +372,7 @@ function renderMealsRecipes() {
     return;
   }
   el.innerHTML = rows.map(({ r, count, last }) => {
-    const host = r.url_key ? r.url_key.split("/")[0] : "pasted";
+    const host = r.url_key ? r.url_key.split("/")[0] : (r.source_text ? "pasted" : "no link");
     const stats = count ? `cooked ${count}× · last ${escapeHtml(mealsFmtDate(last, { month: "short", day: "numeric", year: "numeric" }))}` : "never cooked";
     return `
       <div class="meals-recipe-row" data-id="${r.id}">
@@ -365,8 +384,6 @@ function renderMealsRecipes() {
         <div class="meals-recipe-actions">
           <input type="date" class="meals-recipe-date" value="${todayLocalStr()}" aria-label="Day to plan" />
           <button class="meals-recipe-plan">Plan</button>
-          <button class="meals-recipe-rename" title="Rename">Rename</button>
-          <button class="plan-item-remove meals-recipe-delete" aria-label="Delete recipe" title="Delete recipe">&times;</button>
         </div>
       </div>`;
   }).join("");
@@ -382,12 +399,6 @@ function renderMealsRecipes() {
       if (err) { alert("Failed to plan: " + err.message); return; }
       mealsJumpToDate(date);
     });
-  });
-  el.querySelectorAll(".meals-recipe-rename").forEach((btn) => {
-    btn.addEventListener("click", () => renameRecipe(Number(btn.closest(".meals-recipe-row").dataset.id)));
-  });
-  el.querySelectorAll(".meals-recipe-delete").forEach((btn) => {
-    btn.addEventListener("click", () => deleteRecipe(Number(btn.closest(".meals-recipe-row").dataset.id)));
   });
 }
 
@@ -409,8 +420,205 @@ async function deleteRecipe(id) {
   if (error) { alert("Failed to delete: " + error.message); return; }
   mealsRecipes = mealsRecipes.filter((x) => x.id !== id);
   mealsPlan = mealsPlan.filter((p) => p.recipe_id !== id);
+  if (mealsOpenRecipeId === id) closeRecipeDrawer();
   renderMeals();
 }
+
+// ---------- recipe side pane ----------
+// Click any recipe name (week, history, recipe box) to open it: link + pasted recipe, notes,
+// every time it was cooked (with a note per time), what's planned, and rename/delete.
+let mealsOpenRecipeId = null;
+
+// Any recipe name anywhere on the Meals tab opens the pane.
+document.getElementById("homeMeals").addEventListener("click", (e) => {
+  const btn = e.target.closest(".meal-open-recipe");
+  if (btn) openRecipeDrawer(Number(btn.dataset.recipeId));
+});
+
+function openRecipeDrawer(id) {
+  const r = mealsRecipes.find((x) => x.id === id);
+  if (!r) return;
+  if (mealsOpenRecipeId !== id) {
+    mealsOpenRecipeId = id;
+    document.getElementById("recipeNotes").value = r.notes || "";
+    document.getElementById("recipeNotesStatus").textContent = "";
+    document.getElementById("recipeLogDate").value = todayLocalStr();
+    document.getElementById("recipeLogNote").value = "";
+    document.getElementById("recipePlanDate").value = todayLocalStr();
+  }
+  renderRecipeDrawer();
+  document.getElementById("recipeDrawer").classList.add("open");
+  document.getElementById("recipeBackdrop").classList.add("open");
+}
+
+async function closeRecipeDrawer() {
+  if (mealsOpenRecipeId == null) return;
+  await saveRecipeNotes(); // don't lose a note typed right before closing
+  mealsOpenRecipeId = null;
+  document.getElementById("recipeDrawer").classList.remove("open");
+  document.getElementById("recipeBackdrop").classList.remove("open");
+}
+
+function renderRecipeDrawer() {
+  if (mealsOpenRecipeId == null) return;
+  const r = mealsRecipes.find((x) => x.id === mealsOpenRecipeId);
+  if (!r) { closeRecipeDrawer(); return; }
+
+  document.getElementById("recipeDrawerTitle").textContent = r.title;
+  const where = r.url_key ? r.url_key.split("/")[0] : (r.source_text ? "pasted recipe" : "no link");
+  const added = r.created_by ? ` · added by ${mealsWho(r.created_by)}` : "";
+  document.getElementById("recipeDrawerSubtitle").textContent = where + added;
+
+  const u = r.url && mealsParseUrl(r.url);
+  document.getElementById("recipeDrawerLink").innerHTML = u
+    ? `<a href="${escapeHtml(u.href)}" target="_blank" rel="noopener noreferrer">Open recipe ↗</a>`
+    : "";
+  document.getElementById("recipeDrawerText").innerHTML = mealsRecipeTextHtml(r);
+  // Someone else may have edited the notes; only refresh the box if it isn't being typed in.
+  const notesEl = document.getElementById("recipeNotes");
+  if (document.activeElement !== notesEl) notesEl.value = r.notes || "";
+
+  const rows = mealsPlan.filter((p) => p.recipe_id === r.id);
+  const cooked = rows.filter((p) => p.cooked_at).sort((a, b) => b.plan_date.localeCompare(a.plan_date) || b.id - a.id);
+  const today = todayLocalStr();
+  const upcoming = rows.filter((p) => !p.cooked_at).sort((a, b) => a.plan_date.localeCompare(b.plan_date));
+
+  document.getElementById("recipeCookCount").textContent = cooked.length
+    ? `${cooked.length}× · last ${mealsFmtDate(cooked[0].plan_date, { month: "short", day: "numeric", year: "numeric" })}`
+    : "";
+
+  document.getElementById("recipeCookHistory").innerHTML = cooked.length
+    ? cooked.map((p) => `
+      <div class="recipe-cook-row" data-id="${p.id}">
+        <div class="recipe-cook-head">
+          <span class="recipe-cook-date">${escapeHtml(mealsFmtDate(p.plan_date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }))}</span>
+          <span class="hint">${escapeHtml(mealsWho(p.cooked_by))}</span>
+          <button class="plan-item-remove recipe-cook-remove" aria-label="Remove from history" title="Remove from history">&times;</button>
+        </div>
+        <input type="text" class="recipe-cook-note" maxlength="2000" placeholder="Add a note for this time…" value="${escapeHtml(p.cook_note || "")}" />
+      </div>`).join("")
+    : `<div class="journal-empty">Not cooked yet. Check it off on the plan, or log a time above.</div>`;
+
+  document.getElementById("recipeUpcoming").innerHTML = upcoming.length
+    ? upcoming.map((p) => {
+        const st = MEALS_SHOP_STATES.find((s) => s.v === p.shop_status);
+        const late = p.plan_date < today ? ` <span class="hint">(not checked off)</span>` : "";
+        return `
+        <div class="recipe-upcoming-row" data-id="${p.id}">
+          <button type="button" class="recipe-upcoming-date" data-date="${p.plan_date}" title="Show this week">${escapeHtml(mealsFmtDate(p.plan_date))}</button>${late}
+          ${st ? `<span class="meal-have-btn ${st.v} on recipe-upcoming-status">${st.label}</span>` : ""}
+        </div>`;
+      }).join("")
+    : `<div class="journal-empty">Not on the plan.</div>`;
+
+  const hist = document.getElementById("recipeCookHistory");
+  hist.querySelectorAll(".recipe-cook-note").forEach((input) => {
+    input.addEventListener("change", () => saveCookNote(Number(input.closest(".recipe-cook-row").dataset.id), input));
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
+  });
+  hist.querySelectorAll(".recipe-cook-remove").forEach((btn) => {
+    btn.addEventListener("click", () => removeMealPlan(Number(btn.closest(".recipe-cook-row").dataset.id)));
+  });
+  document.querySelectorAll("#recipeUpcoming .recipe-upcoming-date").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      closeRecipeDrawer();
+      mealsJumpToDate(btn.dataset.date);
+      document.getElementById("mealsWeek").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
+async function saveRecipeNotes() {
+  const id = mealsOpenRecipeId;
+  const r = id != null && mealsRecipes.find((x) => x.id === id);
+  if (!r) return;
+  const el = document.getElementById("recipeNotes");
+  const val = el.value.trim() || null;
+  if (val === (r.notes || null)) return;
+  const status = document.getElementById("recipeNotesStatus");
+  status.textContent = "Saving…";
+  const { error } = await sb.from("recipes").update({ notes: val }).eq("id", id);
+  if (error) { status.textContent = "Couldn't save: " + error.message; return; }
+  r.notes = val;
+  status.textContent = "Saved";
+  setTimeout(() => { if (status.textContent === "Saved") status.textContent = ""; }, 1500);
+  renderMealsWeek();
+  renderMealsHistory();
+  renderMealsRecipes();
+}
+
+let mealsNotesTimer = null;
+document.getElementById("recipeNotes").addEventListener("input", () => {
+  document.getElementById("recipeNotesStatus").textContent = "";
+  clearTimeout(mealsNotesTimer);
+  mealsNotesTimer = setTimeout(saveRecipeNotes, 1200);
+});
+document.getElementById("recipeNotes").addEventListener("blur", () => { clearTimeout(mealsNotesTimer); saveRecipeNotes(); });
+
+async function saveCookNote(planId, input) {
+  const p = mealsPlan.find((x) => x.id === planId);
+  if (!p) return;
+  const val = input.value.trim() || null;
+  if (val === (p.cook_note || null)) return;
+  const { error } = await sb.from("meal_plan").update({ cook_note: val }).eq("id", planId);
+  if (error) { alert("Failed to save the note: " + error.message); input.value = p.cook_note || ""; return; }
+  p.cook_note = val;
+  renderMealsWeek();
+  renderMealsHistory();
+}
+
+// Log a time it was cooked that wasn't on the plan (or before the app existed).
+document.getElementById("recipeLogCookForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = mealsOpenRecipeId;
+  const date = document.getElementById("recipeLogDate").value;
+  if (id == null || !date) return;
+  const note = document.getElementById("recipeLogNote").value.trim() || null;
+  const btn = e.submitter || e.target.querySelector("button");
+  btn.disabled = true;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    // Already planned for that day and not checked off? Check that one off instead of adding a second.
+    const planned = mealsPlan.find((p) => p.recipe_id === id && p.plan_date === date && !p.cooked_at);
+    const patch = { cooked_at: new Date().toISOString(), cooked_by: session?.user?.email || null };
+    if (note) patch.cook_note = note;
+    const q = planned
+      ? sb.from("meal_plan").update(patch).eq("id", planned.id).select().single()
+      : sb.from("meal_plan").insert({ recipe_id: id, plan_date: date, ...patch }).select().single();
+    const { data, error } = await q;
+    if (error) { alert("Failed to log it: " + error.message); return; }
+    if (planned) Object.assign(planned, data); else mealsPlan.push(data);
+    document.getElementById("recipeLogNote").value = "";
+    renderMeals();
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("recipePlanForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = mealsOpenRecipeId;
+  const date = document.getElementById("recipePlanDate").value;
+  if (id == null || !date) return;
+  const btn = e.submitter || e.target.querySelector("button");
+  btn.disabled = true;
+  const err = await addMealPlan(id, date);
+  btn.disabled = false;
+  if (err) { alert("Failed to plan: " + err.message); return; }
+  mealsJumpToDate(date);
+});
+
+document.getElementById("recipeRenameBtn").addEventListener("click", () => {
+  if (mealsOpenRecipeId != null) renameRecipe(mealsOpenRecipeId);
+});
+document.getElementById("recipeDeleteBtn").addEventListener("click", () => {
+  if (mealsOpenRecipeId != null) deleteRecipe(mealsOpenRecipeId);
+});
+document.getElementById("recipeDrawerCloseBtn").addEventListener("click", closeRecipeDrawer);
+document.getElementById("recipeBackdrop").addEventListener("click", closeRecipeDrawer);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && mealsOpenRecipeId != null) closeRecipeDrawer();
+});
 
 // ---------- add ----------
 async function addMealPlan(recipeId, date) {
