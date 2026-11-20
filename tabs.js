@@ -8,12 +8,14 @@ const TOP_TABS = [
   { key: "connections", btnId: "connectionsTabBtn", contentId: "connectionsApp" },
   { key: "paper", btnId: "paperTabBtn", contentId: "paperApp" },
   { key: "home", btnId: "homeTabBtn", contentId: "homeApp" },
+  { key: "lists", btnId: "listsTabBtn", contentId: "listsApp" },
 ];
 
 let homeLoaded = false;
 let spiritualLoaded = false;
 let connectionsLoaded = false;
 let paperLoaded = false;
+let listsLoaded = false;
 
 // Which subtab is current within a top tab that has subtabs — tracked so the
 // hash can be rebuilt (e.g. "#health/plan") whenever either level changes.
@@ -46,6 +48,10 @@ function activateTab(key) {
   if (key === "paper" && !paperLoaded) {
     paperLoaded = true;
     loadPaperData();
+  }
+  if (key === "lists" && !listsLoaded) {
+    listsLoaded = true;
+    loadListsData();
   }
 
   updateUrlHash();
@@ -130,6 +136,7 @@ function updateUrlHash() {
     activeTop.key === "health" ? currentHealthSubtab :
     activeTop.key === "home" ? currentHomeSubtab :
     activeTop.key === "connections" ? currentConnectionsSubtab :
+    activeTop.key === "lists" ? (typeof listsSelectedId !== "undefined" && listsSelectedId ? String(listsSelectedId) : null) :
     null;
   const next = "#" + (sub ? `${activeTop.key}/${sub}` : activeTop.key);
   if (location.hash !== next) history.replaceState(null, "", next);
@@ -157,6 +164,8 @@ function applyRouteFromHash() {
   } else if (validTop === "connections") {
     const validSub = CONNECTIONS_SUBTABS.some((t) => t.key === subKey) ? subKey : "businesses";
     activateConnectionsSubtab(validSub);
+  } else if (validTop === "lists" && subKey) {
+    selectListById(subKey);
   }
 }
 

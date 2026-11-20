@@ -36,6 +36,7 @@
       <button class="tab-btn" id="connectionsTabBtn" data-tab="connections">Connections</button>
       <button class="tab-btn" id="paperTabBtn" data-tab="paper">Paper</button>
       <button class="tab-btn" id="homeTabBtn" data-tab="home">House</button>
+      <button class="tab-btn" id="listsTabBtn" data-tab="lists">Lists</button>
     </div>
     <div class="controls hidden" id="healthControls">
       <label>
@@ -984,6 +985,50 @@
     </section>
   </main>
 
+  <main id="listsApp" class="tab-content hidden">
+    <div id="listsLoading">Loading lists…</div>
+
+    <div class="lists-layout hidden" id="listsPanel">
+      <aside class="panel lists-sidebar">
+        <h2>Lists</h2>
+        <nav id="listsNav" class="lists-nav"></nav>
+        <form id="listsNewForm" class="lists-new-form">
+          <input type="text" id="listsNewName" placeholder="New list, e.g. 🎬 Movies" maxlength="80" required autocomplete="off" />
+          <button type="submit">Add</button>
+        </form>
+        <div id="listsNewStatus" class="hint lists-status"></div>
+      </aside>
+
+      <section class="panel lists-main">
+        <div id="listsMainEmpty" class="journal-empty hidden">Make a list on the left to get started: movies to watch, restaurants to try, albums to hear, anything.</div>
+        <div id="listsMain" class="hidden">
+          <div class="panel-heading-row lists-heading">
+            <h2><span id="listsTitleEmoji"></span> <span id="listsTitleName"></span></h2>
+            <div class="panel-heading-actions">
+              <button type="button" id="listsRenameBtn">Rename</button>
+              <button type="button" id="listsDeleteBtn" class="lists-danger">Delete list</button>
+            </div>
+          </div>
+
+          <form id="listsAddForm" class="lists-add-form">
+            <input type="text" inputmode="url" id="listsItemUrl" placeholder="Paste a link (optional) and the name fills in" maxlength="2000" autocomplete="off" />
+            <input type="text" id="listsItemTitle" placeholder="Name" maxlength="300" autocomplete="off" />
+            <input type="text" id="listsItemNotes" placeholder="Notes (optional)" maxlength="4000" autocomplete="off" />
+            <button type="submit" id="listsAddBtn" class="lists-primary">Add</button>
+          </form>
+          <div id="listsAddStatus" class="hint lists-status"></div>
+
+          <div class="lists-toolbar">
+            <input type="text" id="listsFilter" placeholder="Filter this list…" />
+            <label class="lists-showdone"><input type="checkbox" id="listsShowDone" checked /> Show done</label>
+            <span id="listsCount" class="table-count"></span>
+          </div>
+          <ul id="listsItems" class="lists-items"></ul>
+        </div>
+      </section>
+    </div>
+  </main>
+
   <div id="practicesBackdrop" class="journal-backdrop"></div>
   <aside id="practicesDrawer" class="journal-drawer">
     <div class="journal-header">
@@ -1024,6 +1069,7 @@
   <script src="frametv-sources.js"></script>
   <script src="frametv.js"></script>
   <script src="meals.js"></script>
+  <script src="lists.js"></script>
   <script src="settings.js"></script>
   <script src="family.js"></script>
   <script src="today.js"></script>
