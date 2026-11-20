@@ -220,6 +220,70 @@ class FrameTVClient {
 // powers the category facet sidebar.
 const FRAMETV_PAGE_SIZE = 24;
 
+// ---------- API response cache ----------
+// Museum API responses are kept in the browser's Cache Storage (persists
+// across reloads, per device) so repeat searches and re-opening the tab don't
+// hit the APIs again. Search pages expire after a week (collections change
+// slowly); individual Met objects after a month. If an API is down, a stale
+// cached copy is used rather than showing nothing.
+const FRAMETV_CACHE_NAME = "frametv-art-v1";
+const FRAMETV_SEARCH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const FRAMETV_OBJECT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const frameTVCacheStats = { hits: 0, misses: 0 };
+
+async function frameTVOpenCache() {
+  try {
+    return typeof caches !== "undefined" ? await caches.open(FRAMETV_CACHE_NAME) : null;
+  } catch {
+    return null; // private window / storage blocked — just fetch live
+  }
+}
+
+// Returns parsed JSON for `url`, from cache when fresh. Throws (like a
+// failed fetch) only when there's neither a live response nor a cached one.
+// `null` from the API's point of view (non-2xx) is returned as null and not cached.
+async function frameTVCachedJson(url, ttlMs) {
+  const cache = await frameTVOpenCache();
+  let cached = null;
+  if (cache) {
+    try { cached = await cache.match(url); } catch { cached = null; }
+    if (cached) {
+      const at = Number(cached.headers.get("x-frametv-cached-at")) || 0;
+      if (Date.now() - at < ttlMs) {
+        frameTVCacheStats.hits += 1;
+        return cached.json();
+      }
+    }
+  }
+
+  frameTVCacheStats.misses += 1;
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    if (cached) return cached.json();
+    throw e;
+  }
+  if (!res.ok) {
+    if (cached) return cached.json();
+    return null;
+  }
+  const json = await res.json();
+  if (cache) {
+    const stored = new Response(JSON.stringify(json), {
+      headers: { "Content-Type": "application/json", "x-frametv-cached-at": String(Date.now()) },
+    });
+    cache.put(url, stored).catch(() => {});
+  }
+  return json;
+}
+
+async function clearFrameTVArtCache() {
+  try {
+    if (typeof caches !== "undefined") await caches.delete(FRAMETV_CACHE_NAME);
+  } catch {}
+}
+
 async function fetchArticPage(query, page) {
   const params = new URLSearchParams({
     q: query || "painting",
@@ -227,9 +291,8 @@ async function fetchArticPage(query, page) {
     limit: String(FRAMETV_PAGE_SIZE),
     page: String(page),
   });
-  const res = await fetch(`https://api.artic.edu/api/v1/artworks/search?${params}`);
-  if (!res.ok) throw new Error("Art Institute of Chicago search failed.");
-  const json = await res.json();
+  const json = await frameTVCachedJson(`https://api.artic.edu/api/v1/artworks/search?${params}`, FRAMETV_SEARCH_TTL_MS);
+  if (!json) throw new Error("Art Institute of Chicago search failed.");
   return (json.data || [])
     .filter((a) => a.image_id)
     .map((a) => ({
@@ -250,17 +313,15 @@ async function fetchArticPage(query, page) {
 // for the ids in the current window.
 async function fetchMetArtIds(query) {
   const searchParams = new URLSearchParams({ q: query || "painting", hasImages: "true" });
-  const res = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?${searchParams}`);
-  if (!res.ok) throw new Error("The Met search failed.");
-  const json = await res.json();
+  const json = await frameTVCachedJson(`https://collectionapi.metmuseum.org/public/collection/v1/search?${searchParams}`, FRAMETV_SEARCH_TTL_MS);
+  if (!json) throw new Error("The Met search failed.");
   return (json.objectIDs || []).slice(0, 200);
 }
 
 async function fetchMetArtDetails(ids) {
   const objects = await Promise.all(
     ids.map((id) =>
-      fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`)
-        .then((r) => (r.ok ? r.json() : null))
+      frameTVCachedJson(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`, FRAMETV_OBJECT_TTL_MS)
         .catch(() => null)
     )
   );
@@ -280,9 +341,8 @@ async function fetchMetArtDetails(ids) {
 
 async function fetchClevelandPage(query, skip) {
   const params = new URLSearchParams({ q: query || "painting", has_image: "1", limit: String(FRAMETV_PAGE_SIZE), skip: String(skip) });
-  const res = await fetch(`https://openaccess-api.clevelandart.org/api/artworks/?${params}`);
-  if (!res.ok) throw new Error("Cleveland Museum of Art search failed.");
-  const json = await res.json();
+  const json = await frameTVCachedJson(`https://openaccess-api.clevelandart.org/api/artworks/?${params}`, FRAMETV_SEARCH_TTL_MS);
+  if (!json) throw new Error("Cleveland Museum of Art search failed.");
   return (json.data || [])
     .filter((a) => a.images && (a.images.web || a.images.print))
     .map((a) => ({
@@ -502,6 +562,8 @@ async function loadFrameTVArt() {
 
   statusEl.textContent = "Searching…";
   gridEl.innerHTML = "";
+  frameTVCacheStats.hits = 0;
+  frameTVCacheStats.misses = 0;
   frameTVArtResults = [];
   frameTVCategoryFilter = new Set();
   frameTVKnownCategories = new Set();
@@ -527,6 +589,8 @@ async function loadMoreFrameTVArt() {
   const sources = frameTVEnabledSources();
   btn.disabled = true;
   btn.textContent = "Loading…";
+  frameTVCacheStats.hits = 0;
+  frameTVCacheStats.misses = 0;
   try {
     const more = await fetchFrameTVBatch(frameTVPaging.query, sources, { freshMet: false });
     const existingKeys = new Set(frameTVArtResults.map((a) => a.key));
@@ -549,10 +613,17 @@ document.getElementById("frametvLoadMoreBtn").addEventListener("click", loadMore
 // image icons, drop those cards and keep the visible count honest.
 function updateFrameTVArtStatusCount(count) {
   const statusEl = document.getElementById("frametvArtStatus");
+  const { hits, misses } = frameTVCacheStats;
+  const cacheNote = hits && !misses ? " (from cache)" : hits ? ` (${hits} of ${hits + misses} lookups from cache)` : "";
   statusEl.textContent = count
-    ? `${count} result${count === 1 ? "" : "s"}`
+    ? `${count} result${count === 1 ? "" : "s"}${cacheNote}`
     : "No images could be loaded — try a different search or source.";
 }
+
+document.getElementById("frametvClearCacheBtn").addEventListener("click", async () => {
+  await clearFrameTVArtCache();
+  loadFrameTVArt();
+});
 
 ["frametvSourceArtic", "frametvSourceMet", "frametvSourceCleveland"].forEach((id) => {
   document.getElementById(id).addEventListener("change", () => loadFrameTVArt());

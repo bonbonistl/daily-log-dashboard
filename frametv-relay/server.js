@@ -23,6 +23,76 @@ const WebSocket = require("ws");
 const PORT = process.env.PORT || 8787;
 const TOKENS_FILE = path.join(__dirname, "tokens.json");
 
+// Full-size images downloaded for sending are kept on disk (keyed by a hash
+// of the image URL) so re-sending a piece doesn't download it again. Oldest
+// files are pruned once the folder passes IMAGE_CACHE_MAX_BYTES.
+const IMAGE_CACHE_DIR = path.join(__dirname, "image-cache");
+const IMAGE_CACHE_MAX_BYTES = Number(process.env.RELAY_IMAGE_CACHE_MB || 500) * 1024 * 1024;
+
+function imageCachePaths(imageUrl) {
+  const hash = crypto.createHash("sha256").update(imageUrl).digest("hex");
+  return { data: path.join(IMAGE_CACHE_DIR, `${hash}.bin`), meta: path.join(IMAGE_CACHE_DIR, `${hash}.json`) };
+}
+
+function readCachedImage(imageUrl) {
+  const p = imageCachePaths(imageUrl);
+  try {
+    const meta = JSON.parse(fs.readFileSync(p.meta, "utf8"));
+    if (meta.url !== imageUrl) return null;
+    const bytes = fs.readFileSync(p.data);
+    const now = new Date();
+    fs.utimesSync(p.data, now, now); // mark recently used for pruning
+    return { bytes, contentType: meta.contentType || "" };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedImage(imageUrl, bytes, contentType) {
+  try {
+    fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
+    const p = imageCachePaths(imageUrl);
+    fs.writeFileSync(p.data, bytes);
+    fs.writeFileSync(p.meta, JSON.stringify({ url: imageUrl, contentType, savedAt: new Date().toISOString() }));
+    pruneImageCache();
+  } catch (err) {
+    console.error("[relay] couldn't cache image:", err.message);
+  }
+}
+
+function pruneImageCache() {
+  const files = fs.readdirSync(IMAGE_CACHE_DIR)
+    .filter((f) => f.endsWith(".bin"))
+    .map((f) => {
+      const full = path.join(IMAGE_CACHE_DIR, f);
+      const st = fs.statSync(full);
+      return { full, size: st.size, mtime: st.mtimeMs };
+    })
+    .sort((a, b) => a.mtime - b.mtime);
+  let total = files.reduce((n, f) => n + f.size, 0);
+  for (const f of files) {
+    if (total <= IMAGE_CACHE_MAX_BYTES) break;
+    fs.rmSync(f.full, { force: true });
+    fs.rmSync(f.full.replace(/\.bin$/, ".json"), { force: true });
+    total -= f.size;
+  }
+}
+
+async function getImageBytes(imageUrl) {
+  const cached = readCachedImage(imageUrl);
+  if (cached) {
+    console.log(`[relay] using cached image for ${imageUrl}`);
+    return cached;
+  }
+  console.log(`[relay] downloading ${imageUrl}`);
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) throw new Error(`Couldn't download the image (HTTP ${imgRes.status}).`);
+  const contentType = imgRes.headers.get("content-type") || "";
+  const bytes = Buffer.from(await imgRes.arrayBuffer());
+  writeCachedImage(imageUrl, bytes, contentType);
+  return { bytes, contentType };
+}
+
 // ---------- access rules ----------
 // Only this Mac can reach the relay (it listens on loopback, not the Wi-Fi),
 // and only the LifeOS web app may call it from a browser — so other websites
@@ -374,12 +444,8 @@ async function handleRequest(req, res) {
       console.log(`[relay] connecting to ${tvIp}:${tvPort || 8002}…`);
       await client.connect();
 
-      console.log(`[relay] downloading ${imageUrl}`);
-      const imgRes = await fetch(imageUrl);
-      if (!imgRes.ok) throw new Error(`Couldn't download the image (HTTP ${imgRes.status}).`);
-      const contentType = imgRes.headers.get("content-type") || "";
+      const { bytes, contentType } = await getImageBytes(imageUrl);
       const fileType = contentType.includes("png") ? "png" : "jpg";
-      const bytes = Buffer.from(await imgRes.arrayBuffer());
 
       console.log(`[relay] uploading ${bytes.length} bytes to the TV…`);
       const contentId = await client.upload(bytes, { fileType, matte });
