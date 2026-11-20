@@ -371,7 +371,9 @@ let frameTVKnownCategories = new Set(); // categories seen so far this search, s
 // art_key -> { ...latest frame_tv_sent_art row, count } so browse results can
 // be marked/hidden and the drawer can say when a piece was last sent.
 let frameTVSentByKey = new Map();
-let frameTVPaging = { query: null, articPage: 0, clevelandSkip: 0, metOffset: 0, metTotal: null };
+// art_key -> frame_tv_owned_art row: pieces the family has marked "I have this".
+let frameTVOwnedByKey = new Map();
+let frameTVPaging = { query: null, articPage: 0, clevelandSkip: 0, metOffset: 0, metTotal: null, rijks: frameTVNewRijksState(), wikimediaOffset: 0, vamPage: 0 };
 let frameTVMatteOptions = [
   { matte_id: "none", matte_type: "None" },
   { matte_id: "shadowbox_polar", matte_type: "Shadowbox (Polar)" },
@@ -395,7 +397,7 @@ async function loadFrameTVData() {
       if (data.relay_url) checkFrameTVRelay();
     }
 
-    await loadFrameTVSentHistory();
+    await Promise.all([loadFrameTVSentHistory(), loadFrameTVOwnedArt()]);
     frameTVLoadedOnce = true;
   }
 
@@ -519,6 +521,9 @@ function frameTVEnabledSources() {
     artic: document.getElementById("frametvSourceArtic").checked,
     met: document.getElementById("frametvSourceMet").checked,
     cleveland: document.getElementById("frametvSourceCleveland").checked,
+    rijks: document.getElementById("frametvSourceRijks").checked,
+    wikimedia: document.getElementById("frametvSourceWikimedia").checked,
+    vam: document.getElementById("frametvSourceVam").checked,
   };
 }
 
@@ -550,6 +555,17 @@ async function fetchFrameTVBatch(query, sources) {
     fetchers.push(fetchClevelandPage(query, frameTVPaging.clevelandSkip).catch((e) => { console.error(e); return []; }));
     frameTVPaging.clevelandSkip += FRAMETV_PAGE_SIZE;
   }
+  if (sources.rijks) {
+    fetchers.push(fetchRijksBatch(query, frameTVPaging.rijks).catch((e) => { console.error(e); return []; }));
+  }
+  if (sources.wikimedia) {
+    fetchers.push(fetchWikimediaPage(query, frameTVPaging.wikimediaOffset).catch((e) => { console.error(e); return []; }));
+    frameTVPaging.wikimediaOffset += FRAMETV_PAGE_SIZE;
+  }
+  if (sources.vam) {
+    frameTVPaging.vamPage += 1;
+    fetchers.push(fetchVamPage(query, frameTVPaging.vamPage).catch((e) => { console.error(e); return []; }));
+  }
   return (await Promise.all(fetchers)).flat();
 }
 
@@ -560,7 +576,7 @@ async function loadFrameTVArt() {
   const loadMoreBtn = document.getElementById("frametvLoadMoreBtn");
   const sources = frameTVEnabledSources();
 
-  if (!sources.artic && !sources.met && !sources.cleveland) {
+  if (!Object.values(sources).some(Boolean)) {
     statusEl.textContent = "Select at least one source.";
     gridEl.innerHTML = "";
     loadMoreBtn.classList.add("hidden");
@@ -574,7 +590,7 @@ async function loadFrameTVArt() {
   frameTVArtResults = [];
   frameTVCategoryFilter = new Set();
   frameTVKnownCategories = new Set();
-  frameTVPaging = { query, articPage: 0, clevelandSkip: 0, metOffset: 0, metTotal: null };
+  frameTVPaging = { query, articPage: 0, clevelandSkip: 0, metOffset: 0, metTotal: null, rijks: frameTVNewRijksState(), wikimediaOffset: 0, vamPage: 0 };
 
   frameTVArtResults = await fetchFrameTVBatch(query, sources);
 
@@ -632,7 +648,7 @@ document.getElementById("frametvClearCacheBtn").addEventListener("click", async 
   loadFrameTVArt();
 });
 
-["frametvSourceArtic", "frametvSourceMet", "frametvSourceCleveland"].forEach((id) => {
+["frametvSourceArtic", "frametvSourceMet", "frametvSourceCleveland", "frametvSourceRijks", "frametvSourceWikimedia", "frametvSourceVam"].forEach((id) => {
   document.getElementById(id).addEventListener("change", () => loadFrameTVArt());
 });
 
@@ -681,7 +697,6 @@ function addFrameTVSentBadge(card, key) {
   const badge = document.createElement("span");
   badge.className = "art-fit-badge art-sent-badge";
   badge.style.left = "auto";
-  badge.style.right = "8px";
   badge.style.background = "#555";
   badge.textContent = "Sent";
   badge.title = `Sent ${frameTVFormatSentDate(frameTVSentByKey.get(key).sent_at)}`;
@@ -716,6 +731,7 @@ function renderFrameTVSentHistory() {
     </div>
   `).join("");
   grid.querySelectorAll(".art-card").forEach((card) => {
+    syncFrameTVOwnedBadge(card);
     card.addEventListener("click", () => {
       const row = frameTVSentByKey.get(card.dataset.artKey);
       if (row) openFrameTVDrawer(frameTVArtFromSentRow(row));
@@ -732,6 +748,59 @@ document.getElementById("frametvFitOnlyFilter").addEventListener("change", () =>
   renderFrameTVArtGrid();
   updateFrameTVArtStatusCount(getFilteredFrameTVResults().length);
 });
+
+// ---------- "I have this" marks ----------
+async function loadFrameTVOwnedArt() {
+  const { data, error } = await sb.from("frame_tv_owned_art").select("*");
+  if (error) return;
+  frameTVOwnedByKey = new Map((data || []).map((row) => [row.art_key, row]));
+}
+
+// Adds/removes the ✓ badge to match frameTVOwnedByKey. The owned check sits
+// in the top-right corner, so the "Sent" badge shifts left when both show.
+function syncFrameTVOwnedBadge(card) {
+  const key = card.dataset.artKey;
+  const owned = frameTVOwnedByKey.get(key);
+  let badge = card.querySelector(".art-owned-badge");
+  if (owned && !badge) {
+    badge = document.createElement("span");
+    badge.className = "art-owned-badge";
+    badge.textContent = "✓";
+    badge.setAttribute("aria-label", "In your collection");
+    card.appendChild(badge);
+  } else if (!owned && badge) {
+    badge.remove();
+    badge = null;
+  }
+  if (badge) badge.title = `In your collection (marked ${frameTVFormatSentDate(owned.created_at)})`;
+  card.classList.toggle("is-owned", !!owned);
+}
+
+function syncAllFrameTVOwnedBadges(key) {
+  document.querySelectorAll(`#frametvArtGrid .art-card[data-art-key="${CSS.escape(key)}"], #frametvSentGrid .art-card[data-art-key="${CSS.escape(key)}"]`)
+    .forEach(syncFrameTVOwnedBadge);
+}
+
+async function setFrameTVOwned(art, owned, statusEl) {
+  if (owned) {
+    const { data, error } = await sb.from("frame_tv_owned_art").upsert({
+      art_key: art.key,
+      title: art.title,
+      artist: art.artist,
+      source: art.source,
+      thumb_url: art.thumbUrl,
+      image_url: art.imageUrl,
+      source_url: art.sourceUrl,
+    }, { onConflict: "family_id,art_key" }).select().maybeSingle();
+    if (error || !data) throw new Error(error ? error.message : "No row returned.");
+    frameTVOwnedByKey.set(art.key, data);
+  } else {
+    const { error } = await sb.from("frame_tv_owned_art").delete().eq("art_key", art.key);
+    if (error) throw new Error(error.message);
+    frameTVOwnedByKey.delete(art.key);
+  }
+  syncAllFrameTVOwnedBadges(art.key);
+}
 
 // ---------- category facets ----------
 // Frame TVs are a fixed 16:9 (~1.78) panel — a piece with a landscape image
@@ -845,6 +914,7 @@ function renderFrameTVArtGrid() {
   gridEl.querySelectorAll(".art-card").forEach((card) => {
     card.addEventListener("click", () => openFrameTVDrawer(card.dataset.artKey));
     addFrameTVSentBadge(card, card.dataset.artKey);
+    syncFrameTVOwnedBadge(card);
     const img = card.querySelector("img");
 
     img.addEventListener("error", () => {
@@ -899,6 +969,11 @@ function openFrameTVDrawer(keyOrArt) {
     <p class="hint">${escapeHtml(art.artist)} — ${escapeHtml(art.source)}</p>
     <p><a href="${escapeHtml(art.sourceUrl)}" target="_blank" rel="noopener noreferrer">View source ↗</a></p>
     ${sentNote}
+    <label class="frametv-owned-toggle">
+      <input type="checkbox" id="frametvOwnedCheckbox" ${frameTVOwnedByKey.has(art.key) ? "checked" : ""} />
+      <span>I have this on my TV</span>
+    </label>
+    <p id="frametvOwnedStatus" class="hint"></p>
     <label>Matte
       <select id="frametvMatteSelect">${matteOptionsHtml}</select>
     </label>
@@ -907,6 +982,22 @@ function openFrameTVDrawer(keyOrArt) {
   `;
 
   document.getElementById("frametvSendBtn").addEventListener("click", () => sendFrameTVArt(art));
+
+  const ownedCb = document.getElementById("frametvOwnedCheckbox");
+  ownedCb.addEventListener("change", async () => {
+    const statusEl = document.getElementById("frametvOwnedStatus");
+    const want = ownedCb.checked;
+    ownedCb.disabled = true;
+    statusEl.textContent = "";
+    try {
+      await setFrameTVOwned(art, want);
+    } catch (e) {
+      ownedCb.checked = !want;
+      statusEl.textContent = `Couldn't save: ${e.message}`;
+    } finally {
+      ownedCb.disabled = false;
+    }
+  });
 
   document.getElementById("frametvDrawer").classList.add("open");
   document.getElementById("frametvBackdrop").classList.add("open");
