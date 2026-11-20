@@ -472,7 +472,7 @@ function renderPersonPrayers() {
           <span class="person-history-date">${fmtCrmDate(r.pray_on)}${r.answered_at ? ` · answered ${fmtCrmDate(toLocalDateStr(new Date(r.answered_at)))}` : ""}</span>
         </label>
         <span class="person-prayer-actions">
-          <button type="button" class="prayer-followup-btn prayer-add-person-btn" title="Add someone else to this request">+ Person</button>
+          <button type="button" class="prayer-add-person-btn" title="Add someone else to this request">+ Person</button>
           ${prayerFollowupBtnHtml()}
           <button type="button" class="plan-item-remove person-prayer-remove" title="Delete request">&times;</button>
         </span>
@@ -598,6 +598,8 @@ function wirePrayerPersonInput(input, onPick) {
     // Datalist picks arrive without a typing inputType.
     if (!e.inputType || e.inputType === "insertReplacementText") resolve();
   });
+  // A full name typed out and then tabbed/clicked away from still counts.
+  input.addEventListener("change", resolve);
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     e.preventDefault();

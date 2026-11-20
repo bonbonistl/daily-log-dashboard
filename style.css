@@ -1935,7 +1935,7 @@ button:hover { border-color: var(--accent); }
 
 /* prayer follow-ups: a quiet thread under the request, added from a small text link */
 .person-prayer-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.prayer-followup-btn {
+.prayer-followup-btn, .prayer-add-person-btn {
   background: none;
   border: none;
   padding: 0;
@@ -1944,7 +1944,7 @@ button:hover { border-color: var(--accent); }
   color: var(--muted);
   cursor: pointer;
 }
-.prayer-followup-btn:hover { color: var(--accent); }
+.prayer-add-person-btn:hover, .prayer-followup-btn:hover { color: var(--accent); }
 .prayer-updates {
   list-style: none;
   margin: 6px 0 0;
