@@ -85,7 +85,8 @@ async function getImageBytes(imageUrl) {
     return cached;
   }
   console.log(`[relay] downloading ${imageUrl}`);
-  const imgRes = await fetch(imageUrl);
+  // Some hosts (Wikimedia) reject requests without a descriptive User-Agent.
+  const imgRes = await fetch(imageUrl, { headers: { "User-Agent": "LifeOS-FrameTV-relay/1.0 (personal art display)" } });
   if (!imgRes.ok) throw new Error(`Couldn't download the image (HTTP ${imgRes.status}).`);
   const contentType = imgRes.headers.get("content-type") || "";
   const bytes = Buffer.from(await imgRes.arrayBuffer());
