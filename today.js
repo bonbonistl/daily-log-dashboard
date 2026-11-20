@@ -20,6 +20,13 @@ const INACTIVE_JOB_STATUSES = ["declined", "auto_declined", "not_a_match"];
 // Pipeline order, furthest along first — an offer matters more than something you're watching.
 const JOB_STAGE_RANK = { offered: 0, interviewing: 1, heard_back: 2, applied: 3, watching: 4 };
 const JOB_STALE_DAYS = 10;
+const MEALS_AHEAD_DAYS = 7;
+
+function addDaysLocal(d, n) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
 
 let todayData = null; // { practices, habitLog, people, openings, businesses, logRows, planRows, prayers, disruptions }
 let todayLoadedOnce = false;
@@ -55,6 +62,10 @@ async function loadTodayData() {
     sb.from("rule_of_life_disruptions").select("id, log_date, cause").order("id", { ascending: true }),
     // All-time (one small row per day) so the check-in patterns can line it up with the tags above.
     sb.from("consumption_checkins").select("*").order("log_date", { ascending: true }),
+    // This week's meal plan (family-shared, House → Meals) — today plus the next six days.
+    sb.from("meal_plan").select("*, recipes(id, title, url)")
+      .gte("plan_date", todayStr).lte("plan_date", toLocalDateStr(addDaysLocal(new Date(), MEALS_AHEAD_DAYS - 1)))
+      .order("plan_date", { ascending: true }).order("id", { ascending: true }),
   ]);
 
   let results;
@@ -72,7 +83,7 @@ async function loadTodayData() {
     return;
   }
 
-  const [practicesRes, habitLogRes, peopleRes, openingsRes, businessesRes, logRes, planRes, prayersRes, disruptionsRes, consumptionRes] = results;
+  const [practicesRes, habitLogRes, peopleRes, openingsRes, businessesRes, logRes, planRes, prayersRes, disruptionsRes, consumptionRes, mealPlanRes] = results;
   todayData = {
     practices: practicesRes.data,
     habitLog: habitLogRes.data,
@@ -84,6 +95,7 @@ async function loadTodayData() {
     prayers: prayersRes.data,
     disruptions: disruptionsRes.data,
     consumption: consumptionRes.data,
+    mealPlan: mealPlanRes.data,
   };
   todayLoadedOnce = true;
   statusEl.classList.add("hidden");
@@ -104,6 +116,7 @@ function renderTodayDashboard() {
   renderTodayPrayers(now);
   renderTodayJobs(now);
   renderTodayHealth(todayStr);
+  renderTodayMeals(todayStr);
   renderTodayHeadlines();
   loadTodayWeather();
   loadTodayCalendar();
@@ -731,6 +744,121 @@ function renderTodayJobs(now) {
     activateTab("connections");
     activateConnectionsSubtab("businesses");
   });
+}
+
+// ---------- meal plan (House → Meals) ----------
+// Read-mostly view of the family meal plan: tonight first, then whatever's planned for
+// the rest of the next week. Cooked can be ticked here; everything else lives on Meals.
+const TODAY_SHOP_LABELS = { need: "Need to shop", in_cart: "In cart", have: "Have ✓" };
+
+function renderTodayMeals(todayStr) {
+  const plan = todayData.mealPlan || [];
+  const el = document.getElementById("todayMeals");
+  const tonight = plan.filter((p) => p.plan_date === todayStr);
+  const later = plan.filter((p) => p.plan_date > todayStr);
+  const needShop = plan.filter((p) => !p.cooked_at && p.shop_status === "need");
+
+  document.getElementById("todayMealsCount").textContent = plan.length ? `${plan.length} planned` : "";
+
+  const mealRow = (p, canCook) => {
+    const r = p.recipes || {};
+    let link = "";
+    try {
+      const u = r.url ? new URL(/^https?:\/\//i.test(r.url) ? r.url : "https://" + r.url) : null;
+      if (u) link = ` <a class="job-opening-url-link" href="${escHtml(u.href)}" target="_blank" rel="noopener noreferrer" title="Open the recipe">↗</a>`;
+    } catch (_) { /* not a usable link */ }
+    const shop = !p.cooked_at && p.shop_status
+      ? `<span class="today-meal-shop ${p.shop_status}">${TODAY_SHOP_LABELS[p.shop_status] || ""}</span>` : "";
+    const missing = !p.cooked_at && (p.shop_status === "need" || p.shop_status === "in_cart") && p.missing_items
+      ? `<div class="today-row-sub">${escHtml(p.missing_items)}</div>` : "";
+    const title = `<button type="button" class="today-meal-open" data-recipe-id="${r.id}">${escHtml(r.title || "Untitled")}</button>${link}`;
+    if (canCook) {
+      return `
+        <label class="rol-item today-meal-item ${p.cooked_at ? "done" : ""}" data-id="${p.id}">
+          <input type="checkbox" ${p.cooked_at ? "checked" : ""} aria-label="Cooked" />
+          <span class="today-meal-main">${title}${missing}</span>
+          ${shop || (p.cooked_at ? `<span class="today-item-tag">cooked</span>` : "")}
+        </label>`;
+    }
+    return `
+      <div class="today-meal-later-row">
+        <span class="today-meal-main">${title}${missing}</span>
+        ${shop}
+      </div>`;
+  };
+
+  const byDay = new Map();
+  later.forEach((p) => {
+    if (!byDay.has(p.plan_date)) byDay.set(p.plan_date, []);
+    byDay.get(p.plan_date).push(p);
+  });
+  const tomorrowStr = toLocalDateStr(addDaysLocal(new Date(), 1));
+  const dayLabel = (d) => d === tomorrowStr ? "Tomorrow"
+    : new Date(d + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+
+  const shopLine = needShop.length
+    ? `<div class="today-nudge">🛒 ${needShop.length} meal${needShop.length === 1 ? "" : "s"} still need${needShop.length === 1 ? "s" : ""} shopping${
+        needShop.some((p) => p.missing_items) ? ": " + needShop.map((p) => p.missing_items).filter(Boolean).map(escHtml).join(", ") : ""}</div>`
+    : "";
+
+  el.innerHTML = `
+    ${shopLine}
+    <div class="today-subhead">Tonight</div>
+    ${tonight.length
+      ? `<div class="rol-checklist">${tonight.map((p) => mealRow(p, true)).join("")}</div>`
+      : `<div class="journal-empty">Nothing planned for today.</div>`}
+    ${[...byDay.entries()].map(([d, meals]) => `
+      <div class="today-meal-day">
+        <div class="today-meal-day-label">${escHtml(dayLabel(d))}</div>
+        <div class="today-meal-day-list">${meals.map((p) => mealRow(p, false)).join("")}</div>
+      </div>`).join("")}
+    ${!later.length ? `<div class="hint today-meal-none">Nothing else planned this week.</div>` : ""}
+    <button type="button" class="today-link-btn" id="todayMealsOpenBtn">Open meal plan →</button>
+  `;
+
+  el.querySelectorAll(".today-meal-item").forEach((label) => {
+    label.addEventListener("click", (e) => {
+      if (e.target.closest(".today-meal-open, a")) return;
+      e.preventDefault();
+      if (label.dataset.busy) return;
+      toggleTodayMealCooked(label);
+    });
+  });
+  el.querySelectorAll(".today-meal-open").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openTodayRecipe(Number(btn.dataset.recipeId));
+    });
+  });
+  document.getElementById("todayMealsOpenBtn").addEventListener("click", () => openTodayRecipe(null));
+}
+
+async function toggleTodayMealCooked(label) {
+  label.dataset.busy = "1";
+  const p = todayData.mealPlan.find((x) => String(x.id) === label.dataset.id);
+  let patch = { cooked_at: null, cooked_by: null };
+  if (!p.cooked_at) {
+    const { data: { session } } = await sb.auth.getSession();
+    patch = { cooked_at: new Date().toISOString(), cooked_by: session?.user?.email || null };
+  }
+  const { error } = await sb.from("meal_plan").update(patch).eq("id", p.id);
+  if (error) { alert("Failed to update: " + error.message); delete label.dataset.busy; return; }
+  Object.assign(p, patch);
+  renderTodayMeals(todayLocalStr());
+  // Keep House → Meals in sync if it's already loaded.
+  if (typeof mealsTabLoaded !== "undefined" && mealsTabLoaded) loadMealsData();
+}
+
+// Jump to House → Meals, optionally opening a recipe's side pane once the data is in.
+async function openTodayRecipe(recipeId) {
+  activateTab("home");
+  if (!mealsTabLoaded) {
+    mealsTabLoaded = true;
+    await loadMealsData();
+  }
+  activateHomeSubtab("meals");
+  if (recipeId) openRecipeDrawer(recipeId);
 }
 
 // ---------- food & exercise ----------
