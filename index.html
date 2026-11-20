@@ -904,6 +904,11 @@
       <h3>Prayer Requests</h3>
       <form id="personPrayerForm" class="detail-form">
         <textarea id="personPrayerText" rows="2" placeholder="What to pray for" required></textarea>
+        <div class="prayer-also">
+          <div id="personPrayerAlsoChips" class="prayer-also-chips"></div>
+          <input type="text" id="personPrayerAlso" list="prayerPeopleOptions" placeholder="Also for… (type a name)" />
+          <datalist id="prayerPeopleOptions"></datalist>
+        </div>
         <div class="plan-add-form">
           <input type="date" id="personPrayerDate" required title="When to pray for this" />
           <button type="submit">Add request</button>

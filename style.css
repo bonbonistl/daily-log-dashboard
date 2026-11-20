@@ -1912,6 +1912,27 @@ button:hover { border-color: var(--accent); }
 .today-prayer-text { font-size: 13px; margin-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .today-prayer-toggle { margin-top: 0; }
 
+/* several people on one prayer request */
+.prayer-also { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.prayer-also input { flex: 1; min-width: 140px; font-size: 13px; padding: 5px 8px; }
+.prayer-also-chips:empty { display: none; }
+.prayer-also-chips, .prayer-people { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.prayer-people { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.prayer-person-chip {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 12px; color: var(--text);
+  background: var(--panel-border); border-radius: 999px; padding: 1px 4px 1px 8px;
+}
+.prayer-person-link {
+  background: none; border: none; padding: 0; font: inherit; color: inherit; cursor: pointer;
+}
+.prayer-person-link:hover { color: var(--accent); }
+.prayer-person-unlink {
+  background: none; border: none; padding: 0 3px; font-size: 14px; line-height: 1;
+  color: var(--muted); cursor: pointer;
+}
+.prayer-person-unlink:hover { color: var(--danger); }
+
 /* prayer follow-ups: a quiet thread under the request, added from a small text link */
 .person-prayer-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .prayer-followup-btn {

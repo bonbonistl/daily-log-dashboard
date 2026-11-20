@@ -57,7 +57,7 @@ async function loadTodayData() {
     sb.from("daily_log").select("*").gte("log_date", toLocalDateStr(yesterday))
       .order("log_date", { ascending: true }).order("id", { ascending: true }),
     sb.from("food_plan").select("*").eq("log_date", todayStr),
-    sb.from("prayer_requests").select("*, people(name)").is("answered_at", null).order("pray_on", { ascending: true }),
+    sb.from("prayer_requests").select("*, prayer_request_people(people(id, name))").is("answered_at", null).order("pray_on", { ascending: true }),
     // Every cause ever logged (not just today's) so a recurring one like "Sabbath" is a one-click chip.
     sb.from("rule_of_life_disruptions").select("id, log_date, cause").order("id", { ascending: true }),
     // All-time (one small row per day) so the check-in patterns can line it up with the tags above.
@@ -646,10 +646,18 @@ function renderTodayPrayers(now) {
       : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
 
+  // One request can be for several people — each name opens their CRM rail.
+  const prayerNamesHtml = (r) => {
+    const ppl = (r.prayer_request_people || []).map((l) => l.people).filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (!ppl.length) return "Someone";
+    return ppl.map((p) => `<button type="button" class="today-person-btn" data-person-id="${p.id}">${escHtml(p.name)}</button>`).join(", ");
+  };
+
   const rowHtml = (e) => `
     <div class="today-row ${e.diff === 0 ? "today-row-highlight" : ""}" data-prayer-row="${e.r.id}">
       <div class="today-row-main">
-        <button type="button" class="today-row-title today-person-btn" data-person-id="${e.r.person_id}">${escHtml(e.r.people?.name || "Someone")}</button>
+        <div class="today-row-title">${prayerNamesHtml(e.r)}</div>
         <div class="today-prayer-text">${escHtml(e.r.request)}</div>
         ${prayerUpdatesHtml(e.r)}
         <div class="today-row-sub">${whenLabel(e.diff, e.r.pray_on)} · ${prayerFollowupBtnHtml()}</div>

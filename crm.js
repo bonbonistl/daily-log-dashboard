@@ -3,7 +3,8 @@ let people = []; // [{id, name, title, linkedin_url, instagram_url, email, phone
 let crmBusinesses = []; // [{id, name}] — lightweight, just for the business select + display
 let openPersonId = null; // id of the person currently shown in the side rail, or null if closed
 let personNotes = []; // [{id, person_id, note_date, body, created_at}] — for the currently open rail only
-let personPrayers = []; // [{id, person_id, request, pray_on, answered_at, created_at}] — for the currently open rail only; answered_at null = still being prayed for
+let personPrayers = []; // [{id, request, pray_on, answered_at, created_at, updates, prayer_request_people: [{person_id, people: {id, name}}]}] — for the currently open rail only; answered_at null = still being prayed for
+let prayerAlsoIds = []; // extra people picked in the rail's "add request" form (the open person is always included)
 
 async function loadCrmData() {
   if (!crmLoadedOnce) {
@@ -36,6 +37,7 @@ async function loadCrmData() {
   people = peopleRes.data;
   crmBusinesses = businessesRes.data;
   fillPeopleFilterSelects();
+  fillPrayerPeopleOptions();
 
   document.getElementById("crmLoading").classList.add("hidden");
   document.getElementById("crmPanel").classList.remove("hidden");
@@ -343,6 +345,9 @@ function openPersonDrawer(personId) {
   document.getElementById("personPrayerText").value = "";
   document.getElementById("personPrayerDate").value = "";
   document.getElementById("personPrayerDate").min = todayLocalStr();
+  document.getElementById("personPrayerAlso").value = "";
+  prayerAlsoIds = [];
+  renderPrayerAlso();
   loadPersonHistory(person.id);
 
   document.getElementById("personDrawer").classList.add("open");
@@ -412,10 +417,18 @@ function refreshTodayIfLoaded() {
 }
 
 async function loadPersonHistory(personId) {
+  // A request can be for several people, so find this person's via the link table.
+  const prayersFor = async () => {
+    const links = await sb.from("prayer_request_people").select("request_id").eq("person_id", personId);
+    if (links.error) return links;
+    if (!links.data.length) return { data: [], error: null };
+    return sb.from("prayer_requests").select("*, prayer_request_people(person_id, people(id, name))")
+      .in("id", links.data.map((l) => l.request_id)).order("pray_on", { ascending: true });
+  };
   const [notesRes, prayersRes] = await Promise.all([
     sb.from("person_notes").select("*").eq("person_id", personId)
       .order("note_date", { ascending: false }).order("created_at", { ascending: false }),
-    sb.from("prayer_requests").select("*").eq("person_id", personId).order("pray_on", { ascending: true }),
+    prayersFor(),
   ]);
   if (String(openPersonId) !== String(personId)) return; // rail moved on while loading
   const error = notesRes.error || prayersRes.error;
@@ -459,11 +472,14 @@ function renderPersonPrayers() {
           <span class="person-history-date">${fmtCrmDate(r.pray_on)}${r.answered_at ? ` · answered ${fmtCrmDate(toLocalDateStr(new Date(r.answered_at)))}` : ""}</span>
         </label>
         <span class="person-prayer-actions">
+          <button type="button" class="prayer-followup-btn prayer-add-person-btn" title="Add someone else to this request">+ Person</button>
           ${prayerFollowupBtnHtml()}
           <button type="button" class="plan-item-remove person-prayer-remove" title="Delete request">&times;</button>
         </span>
       </div>
       <div class="person-history-body">${escCrm(r.request)}</div>
+      ${prayerOthersHtml(r)}
+      <div class="prayer-person-slot"></div>
       ${prayerUpdatesHtml(r)}
     </li>`;
   el.innerHTML = personPrayers.length
@@ -474,6 +490,15 @@ function renderPersonPrayers() {
   });
   el.querySelectorAll(".person-prayer-remove").forEach((btn) => {
     btn.addEventListener("click", () => removePrayerRequest(btn.closest("[data-id]").dataset.id));
+  });
+  el.querySelectorAll(".prayer-person-link").forEach((btn) => {
+    btn.addEventListener("click", () => openPersonDrawer(btn.dataset.personId));
+  });
+  el.querySelectorAll(".prayer-person-unlink").forEach((btn) => {
+    btn.addEventListener("click", () => unlinkPrayerPerson(btn.closest("[data-id]").dataset.id, btn.dataset.personId));
+  });
+  el.querySelectorAll(".prayer-add-person-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openPrayerAddPerson(btn.closest("[data-id]")));
   });
   wirePrayerUpdates(el);
 }
@@ -497,10 +522,22 @@ document.getElementById("personPrayerForm").addEventListener("submit", async (e)
   const request = document.getElementById("personPrayerText").value.trim();
   const pray_on = document.getElementById("personPrayerDate").value;
   if (!request || !pray_on) return;
-  const { error } = await sb.from("prayer_requests").insert({ person_id: openPersonId, request, pray_on });
+  const { data: row, error } = await sb.from("prayer_requests")
+    .insert({ person_id: openPersonId, request, pray_on }).select("id").single();
   if (error) { alert("Failed to add prayer request: " + error.message); return; }
+  const ids = [openPersonId, ...prayerAlsoIds.filter((id) => String(id) !== String(openPersonId))];
+  const { error: linkErr } = await sb.from("prayer_request_people")
+    .insert(ids.map((person_id) => ({ request_id: row.id, person_id })));
+  if (linkErr) {
+    await sb.from("prayer_requests").delete().eq("id", row.id);
+    alert("Failed to add prayer request: " + linkErr.message);
+    return;
+  }
   document.getElementById("personPrayerText").value = "";
   document.getElementById("personPrayerDate").value = "";
+  document.getElementById("personPrayerAlso").value = "";
+  prayerAlsoIds = [];
+  renderPrayerAlso();
   await loadPersonHistory(openPersonId);
   refreshTodayIfLoaded();
 });
@@ -513,10 +550,105 @@ async function removePersonNote(noteId) {
 }
 
 async function removePrayerRequest(requestId) {
-  if (!confirm("Delete this prayer request?")) return;
+  const r = personPrayers.find((x) => String(x.id) === String(requestId));
+  const n = (r?.prayer_request_people || []).length;
+  if (!confirm(n > 1 ? `Delete this prayer request? It's shared by ${n} people — it will be removed for all of them.` : "Delete this prayer request?")) return;
   const { error } = await sb.from("prayer_requests").delete().eq("id", requestId);
   if (error) { alert("Failed to delete prayer request: " + error.message); return; }
   await loadPersonHistory(openPersonId);
+  refreshTodayIfLoaded();
+}
+
+// ---------- several people on one prayer request ----------
+
+// Everyone on the request other than the person whose rail is open.
+function prayerOthersHtml(r) {
+  const others = (r.prayer_request_people || [])
+    .filter((l) => String(l.person_id) !== String(openPersonId))
+    .map((l) => ({ id: l.person_id, name: l.people?.name || "Someone" }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (!others.length) return "";
+  return `<div class="prayer-people">Also for ${others.map((p) => `
+    <span class="prayer-person-chip">
+      <button type="button" class="prayer-person-link" data-person-id="${p.id}">${escCrm(p.name)}</button>
+      <button type="button" class="prayer-person-unlink" data-person-id="${p.id}" title="Take ${escCrm(p.name)} off this request">&times;</button>
+    </span>`).join("")}</div>`;
+}
+
+function fillPrayerPeopleOptions() {
+  const dl = document.getElementById("prayerPeopleOptions");
+  if (dl) dl.innerHTML = people.map((p) => `<option value="${escCrm(p.name)}"></option>`).join("");
+}
+
+function findPersonByName(name) {
+  const n = name.trim().toLowerCase();
+  return n ? people.find((p) => p.name.trim().toLowerCase() === n) : null;
+}
+
+// A name box backed by the people datalist: picking a suggestion or pressing Enter resolves it.
+function wirePrayerPersonInput(input, onPick) {
+  const resolve = () => {
+    const person = findPersonByName(input.value);
+    if (!person) return false;
+    input.value = "";
+    onPick(person);
+    return true;
+  };
+  input.addEventListener("input", (e) => {
+    // Datalist picks arrive without a typing inputType.
+    if (!e.inputType || e.inputType === "insertReplacementText") resolve();
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    if (input.value.trim() && !resolve()) alert(`No one named "${input.value.trim()}" in your CRM. Add them there first.`);
+  });
+}
+
+function renderPrayerAlso() {
+  const el = document.getElementById("personPrayerAlsoChips");
+  el.innerHTML = prayerAlsoIds.map((id) => {
+    const p = people.find((x) => String(x.id) === String(id));
+    return `<span class="prayer-person-chip">${escCrm(p?.name || "Someone")}
+      <button type="button" class="prayer-person-unlink" data-person-id="${id}" title="Remove">&times;</button></span>`;
+  }).join("");
+  el.querySelectorAll(".prayer-person-unlink").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      prayerAlsoIds = prayerAlsoIds.filter((id) => String(id) !== btn.dataset.personId);
+      renderPrayerAlso();
+    });
+  });
+}
+
+wirePrayerPersonInput(document.getElementById("personPrayerAlso"), (person) => {
+  if (String(person.id) === String(openPersonId) || prayerAlsoIds.some((id) => String(id) === String(person.id))) return;
+  prayerAlsoIds.push(person.id);
+  renderPrayerAlso();
+});
+
+function openPrayerAddPerson(row) {
+  const slot = row.querySelector(".prayer-person-slot");
+  if (slot.firstElementChild) { slot.querySelector("input").focus(); return; }
+  slot.innerHTML = `<div class="prayer-followup-form"><input type="text" list="prayerPeopleOptions" placeholder="Add a person…" /></div>`;
+  const input = slot.querySelector("input");
+  input.addEventListener("keydown", (e) => { if (e.key === "Escape") slot.innerHTML = ""; });
+  input.addEventListener("blur", () => setTimeout(() => { if (!input.value.trim() && document.activeElement !== input) slot.innerHTML = ""; }, 150));
+  wirePrayerPersonInput(input, (person) => linkPrayerPerson(row.dataset.id, person.id));
+  input.focus();
+}
+
+async function linkPrayerPerson(requestId, personId) {
+  const { error } = await sb.from("prayer_request_people")
+    .upsert({ request_id: requestId, person_id: personId }, { onConflict: "request_id,person_id", ignoreDuplicates: true });
+  if (error) { alert("Failed to add person: " + error.message); return; }
+  if (openPersonId != null) await loadPersonHistory(openPersonId);
+  refreshTodayIfLoaded();
+}
+
+async function unlinkPrayerPerson(requestId, personId) {
+  const { error } = await sb.from("prayer_request_people").delete().eq("request_id", requestId).eq("person_id", personId);
+  if (error) { alert("Failed to remove person: " + error.message); return; }
+  if (openPersonId != null) await loadPersonHistory(openPersonId);
   refreshTodayIfLoaded();
 }
 
