@@ -5,7 +5,8 @@ const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const ROL_RANGE_DAYS = 14;
 
 let rolRows = [];
-let rolPractices = []; // [{id, name, emoji, morning, mid_morning, noon, after_work, night, days, sort_order}], ordered by sort_order
+let rolPractices = []; // active (non-archived) [{id, name, emoji, morning, mid_morning, noon, after_work, night, days, sort_order, archived_at}], ordered by sort_order
+let rolArchivedPractices = []; // archived ones — only shown in the Manage Practices drawer, for restoring
 let rolDisruptions = [];
 let spiritualLoadedOnce = false;
 let checkinDateOffset = 0; // 0 = today, 1 = yesterday, 2 = day before
@@ -53,7 +54,8 @@ async function loadSpiritualData() {
   markUpdated("spiritualUpdatedAt");
   spiritualLoadedOnce = true;
   rolRows = logRes.data;
-  rolPractices = practicesRes.data;
+  rolPractices = practicesRes.data.filter((p) => !p.archived_at);
+  rolArchivedPractices = practicesRes.data.filter((p) => p.archived_at);
   rolDisruptions = disruptionsRes.data;
   renderSpiritual();
 }
@@ -424,7 +426,8 @@ function renderPracticesList() {
     <div class="practice-row">
       <div class="name-row">
         <input type="text" class="practice-emoji-input" data-id="${p.id}" value="${p.emoji || ""}" placeholder="🙂" maxlength="8" autocomplete="off" readonly />
-        <div class="name">${p.name}</div>
+        <input type="text" class="practice-name-input" data-id="${p.id}" value="${escHtml(p.name)}" maxlength="80" autocomplete="off" aria-label="Practice name" />
+        <button type="button" class="practice-archive-btn" data-id="${p.id}" title="Hide this practice everywhere; its history is kept">Archive</button>
       </div>
       <div class="time-toggles">
         ${TIMES_OF_DAY.map((time) => {
@@ -446,7 +449,56 @@ function renderPracticesList() {
         `).join("")}
       </div>
     </div>
-  `).join("");
+  `).join("") + (rolArchivedPractices.length ? `
+    <details class="archived-practices">
+      <summary>Archived (${rolArchivedPractices.length})</summary>
+      ${rolArchivedPractices.map((p) => `
+        <div class="practice-row archived">
+          <div class="name-row">
+            <span class="name">${escHtml(practiceLabel(p))}</span>
+            <button type="button" class="practice-restore-btn" data-id="${p.id}">Restore</button>
+          </div>
+        </div>
+      `).join("")}
+    </details>
+  ` : "");
+
+  document.querySelectorAll("#practicesList .practice-name-input").forEach((input) => {
+    const save = async () => {
+      const practice = rolPractices.find((p) => String(p.id) === input.dataset.id);
+      const name = input.value.trim();
+      if (!practice || name === practice.name) return;
+      if (!name) { input.value = practice.name; return; }
+      input.disabled = true;
+      // Log rows reference the practice by name; the FK is ON UPDATE CASCADE, so history follows the rename.
+      const { error } = await sb.from("rule_of_life_practices").update({ name }).eq("id", practice.id);
+      if (error) {
+        alert(error.code === "23505" ? `You already have a practice called "${name}" (it may be archived).` : "Failed to rename: " + error.message);
+      }
+      await loadSpiritualData();
+    };
+    input.addEventListener("change", save);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") {
+        const practice = rolPractices.find((p) => String(p.id) === input.dataset.id);
+        if (practice) input.value = practice.name;
+        e.stopPropagation();
+        input.blur();
+      }
+    });
+  });
+
+  document.querySelectorAll("#practicesList .practice-archive-btn, #practicesList .practice-restore-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const archiving = btn.classList.contains("practice-archive-btn");
+      btn.disabled = true;
+      const { error } = await sb.from("rule_of_life_practices")
+        .update({ archived_at: archiving ? new Date().toISOString() : null }).eq("id", btn.dataset.id);
+      if (error) alert(`Failed to ${archiving ? "archive" : "restore"}: ` + error.message);
+      await loadSpiritualData();
+    });
+  });
 
   document.querySelectorAll("#practicesList input[data-field]").forEach((input) => {
     input.addEventListener("change", async () => {

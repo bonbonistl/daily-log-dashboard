@@ -21,7 +21,7 @@ async function loadInsightsData() {
   const fetchPromise = Promise.all([
     sb.from("daily_log").select("*").eq("category", "Food & Drink").gte("log_date", cutoffStr),
     sb.from("rule_of_life_log").select("*").gte("log_date", cutoffStr),
-    sb.from("rule_of_life_practices").select("*"),
+    sb.from("rule_of_life_practices").select("*").is("archived_at", null),
     sb.from("rule_of_life_disruptions").select("*").gte("log_date", cutoffStr).order("log_date", { ascending: false }),
   ]);
 

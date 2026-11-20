@@ -584,6 +584,43 @@ button:hover { border-color: var(--accent); }
   color: var(--text);
 }
 
+.practice-name-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  font-size: 14px;
+  padding: 5px 6px;
+  border-radius: 6px;
+}
+.practice-name-input:hover { border-color: var(--panel-border); }
+.practice-name-input:focus { outline: none; border-color: var(--accent); background: var(--bg); }
+
+.practice-archive-btn,
+.practice-restore-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.practice-archive-btn:hover,
+.practice-restore-btn:hover { color: var(--text); border-color: var(--muted); }
+
+.archived-practices summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 0;
+}
+.archived-practices .practice-row { margin-top: 8px; }
+.practice-row.archived .name-row { margin-bottom: 0; justify-content: space-between; }
+.practice-row.archived .name { color: var(--muted); }
+
 .practice-emoji-input {
   width: 40px;
   text-align: center;

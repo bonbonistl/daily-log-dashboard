@@ -189,6 +189,7 @@
         <form id="frametvSearchForm" class="plan-add-form">
           <input type="text" id="frametvSearchInput" placeholder="Search public art collections…" maxlength="200" />
           <button type="submit">Search</button>
+          <button type="button" id="frametvClearCacheBtn" class="secondary" title="Searches are cached on this device for a week. This forgets them and searches fresh.">Refresh</button>
         </form>
 
         <div class="frametv-art-layout">
@@ -972,7 +973,7 @@
       <h2>Manage Practices</h2>
       <button id="practicesCloseBtn" aria-label="Close">&times;</button>
     </div>
-    <p class="hint drawer-hint">Choose which check-ins each practice shows up in, and which days of the week it's scheduled for. Uncheck all four times to hide it without deleting its history.</p>
+    <p class="hint drawer-hint">Choose which check-ins each practice shows up in, and which days of the week it's scheduled for. Click a name to rename it. Archive hides a practice everywhere but keeps its history; restore it anytime from the Archived list.</p>
     <form id="addPracticeForm" class="add-practice-form">
       <input type="text" id="newPracticeEmoji" class="practice-emoji-input" placeholder="🙂" maxlength="8" autocomplete="off" readonly />
       <input type="text" id="newPracticeName" placeholder="New practice name" maxlength="80" required />

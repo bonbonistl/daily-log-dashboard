@@ -41,7 +41,7 @@ async function loadTodayData() {
   yesterday.setDate(yesterday.getDate() - 1);
 
   const fetchPromise = Promise.all([
-    sb.from("rule_of_life_practices").select("*").order("sort_order", { ascending: true }),
+    sb.from("rule_of_life_practices").select("*").is("archived_at", null).order("sort_order", { ascending: true }),
     sb.from("rule_of_life_log").select("*").eq("log_date", todayStr),
     sb.from("people").select("id, name, birthday, birthday_celebrated_year").not("birthday", "is", null),
     sb.from("job_openings").select("*"),
