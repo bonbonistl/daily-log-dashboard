@@ -307,15 +307,19 @@ async function fetchArticPage(query, page) {
     }));
 }
 
-// The Met's search endpoint returns every matching object id at once (no
-// paging), so we fetch a large id list once per search and page through it
-// locally, doing a detail fetch (which is where image/title/etc. live) only
-// for the ids in the current window.
-async function fetchMetArtIds(query) {
-  const searchParams = new URLSearchParams({ q: query || "painting", hasImages: "true" });
-  const json = await frameTVCachedJson(`https://collectionapi.metmuseum.org/public/collection/v1/search?${searchParams}`, FRAMETV_SEARCH_TTL_MS);
+// The Met's search (v1.1 — the old unpaged v1 search was retired on
+// 2026-10-01 and now returns HTTP 410) returns a page of object ids plus a
+// total; title/image/etc. only come from a per-object detail fetch.
+async function fetchMetArtIds(query, offset) {
+  const searchParams = new URLSearchParams({
+    q: query || "painting",
+    hasImages: "true",
+    offset: String(offset),
+    limit: String(FRAMETV_PAGE_SIZE),
+  });
+  const json = await frameTVCachedJson(`https://collectionapi.metmuseum.org/public/collection/v1.1/search?${searchParams}`, FRAMETV_SEARCH_TTL_MS);
   if (!json) throw new Error("The Met search failed.");
-  return (json.objectIDs || []).slice(0, 200);
+  return { ids: json.objectIDs || [], total: Number(json.total) || 0 };
 }
 
 async function fetchMetArtDetails(ids) {
@@ -367,7 +371,7 @@ let frameTVKnownCategories = new Set(); // categories seen so far this search, s
 // art_key -> { ...latest frame_tv_sent_art row, count } so browse results can
 // be marked/hidden and the drawer can say when a piece was last sent.
 let frameTVSentByKey = new Map();
-let frameTVPaging = { query: null, articPage: 0, clevelandSkip: 0, metIds: [], metOffset: 0 };
+let frameTVPaging = { query: null, articPage: 0, clevelandSkip: 0, metOffset: 0, metTotal: null };
 let frameTVMatteOptions = [
   { matte_id: "none", matte_type: "None" },
   { matte_id: "shadowbox_polar", matte_type: "Shadowbox (Polar)" },
@@ -519,25 +523,28 @@ function frameTVEnabledSources() {
 }
 
 // Fetches the next page from each enabled source given the current
-// frameTVPaging cursors, advancing those cursors as it goes. `freshMet`
-// re-runs the Met id search (only needed on a brand new search, not a
-// "load more") since the Met id list is paged through locally afterward.
-async function fetchFrameTVBatch(query, sources, { freshMet }) {
+// frameTVPaging cursors, advancing those cursors as it goes.
+async function fetchFrameTVBatch(query, sources) {
   const fetchers = [];
   if (sources.artic) {
     frameTVPaging.articPage += 1;
     fetchers.push(fetchArticPage(query, frameTVPaging.articPage).catch((e) => { console.error(e); return []; }));
   }
   if (sources.met) {
-    fetchers.push((async () => {
-      if (freshMet) {
-        frameTVPaging.metIds = await fetchMetArtIds(query).catch(() => []);
-        frameTVPaging.metOffset = 0;
-      }
-      const batch = frameTVPaging.metIds.slice(frameTVPaging.metOffset, frameTVPaging.metOffset + FRAMETV_PAGE_SIZE);
-      frameTVPaging.metOffset += FRAMETV_PAGE_SIZE;
-      return fetchMetArtDetails(batch).catch((e) => { console.error(e); return []; });
-    })());
+    const offset = frameTVPaging.metOffset;
+    frameTVPaging.metOffset += FRAMETV_PAGE_SIZE;
+    if (frameTVPaging.metTotal === null || offset < frameTVPaging.metTotal) {
+      fetchers.push((async () => {
+        try {
+          const { ids, total } = await fetchMetArtIds(query, offset);
+          frameTVPaging.metTotal = total;
+          return await fetchMetArtDetails(ids);
+        } catch (e) {
+          console.error(e);
+          return [];
+        }
+      })());
+    }
   }
   if (sources.cleveland) {
     fetchers.push(fetchClevelandPage(query, frameTVPaging.clevelandSkip).catch((e) => { console.error(e); return []; }));
@@ -567,9 +574,9 @@ async function loadFrameTVArt() {
   frameTVArtResults = [];
   frameTVCategoryFilter = new Set();
   frameTVKnownCategories = new Set();
-  frameTVPaging = { query, articPage: 0, clevelandSkip: 0, metIds: [], metOffset: 0 };
+  frameTVPaging = { query, articPage: 0, clevelandSkip: 0, metOffset: 0, metTotal: null };
 
-  frameTVArtResults = await fetchFrameTVBatch(query, sources, { freshMet: true });
+  frameTVArtResults = await fetchFrameTVBatch(query, sources);
 
   if (!frameTVArtResults.length) {
     statusEl.textContent = "No public-domain images found — try a different search.";
@@ -592,7 +599,7 @@ async function loadMoreFrameTVArt() {
   frameTVCacheStats.hits = 0;
   frameTVCacheStats.misses = 0;
   try {
-    const more = await fetchFrameTVBatch(frameTVPaging.query, sources, { freshMet: false });
+    const more = await fetchFrameTVBatch(frameTVPaging.query, sources);
     const existingKeys = new Set(frameTVArtResults.map((a) => a.key));
     frameTVArtResults = frameTVArtResults.concat(more.filter((a) => !existingKeys.has(a.key)));
     renderFrameTVCategoryFacets();
