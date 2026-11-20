@@ -4,6 +4,7 @@
 
 let mealsRecipes = [];   // [{id, title, url, url_key, source_text, notes, created_by, created_at}]
 let mealsPlan = [];      // [{id, recipe_id, plan_date, cooked_at, cooked_by, shop_status, missing_items, cook_note, created_by}]
+let mealsAway = [];      // [{id, away_date, note}] — days the family is traveling (nothing to plan)
 let mealsWeekStart = mealsMonday(new Date());
 let mealsTitleTouched = false; // stop auto-filling the title once it's been typed in
 let mealsSelectedRecipeId = null; // set when a saved recipe is picked from the name dropdown
@@ -118,13 +119,14 @@ async function loadMealsData() {
     res = await withTimeout(Promise.all([
       sb.from("recipes").select("*").order("title"),
       sb.from("meal_plan").select("*").order("plan_date", { ascending: false }).order("id"),
+      sb.from("meal_away").select("id, away_date, note").order("away_date"),
     ]), 15000, "Loading meals");
   } catch (e) {
     loading.textContent = e.message;
     loading.classList.remove("hidden");
     return;
   }
-  const error = res[0].error || res[1].error;
+  const error = res[0].error || res[1].error || res[2].error;
   if (error) {
     loading.textContent = "Error loading data: " + error.message;
     loading.classList.remove("hidden");
@@ -132,6 +134,7 @@ async function loadMealsData() {
   }
   mealsRecipes = res[0].data;
   mealsPlan = res[1].data;
+  mealsAway = res[2].data;
   loading.classList.add("hidden");
   document.getElementById("mealsContent").classList.remove("hidden");
   markUpdated("mealsUpdatedAt");
@@ -178,6 +181,10 @@ function renderMealsWeek() {
   }
 
   const dinners = mealsCalDinners(days); // null until the calendar has loaded (or none connected)
+  const allAway = days.every((ds) => mealsAwayOn(ds));
+  const weekBtn = document.getElementById("mealsAwayWeekBtn");
+  weekBtn.textContent = allAway ? "✈️ Home this week" : "✈️ Away all week";
+  weekBtn.title = allAway ? "Clear the traveling mark from every day this week" : "Mark every day this week as traveling — nothing to plan";
   document.getElementById("mealsWeek").innerHTML = days.map((ds) => {
     const items = mealsPlan.filter((p) => p.plan_date === ds).sort((a, b) => a.id - b.id);
     const dayDinners = dinners ? (dinners[ds] || []) : null;
@@ -210,18 +217,24 @@ function renderMealsWeek() {
     }).join("");
     // A "Dinner: …" on the calendar that doesn't match anything planned here.
     const extra = (dayDinners || []).filter((d) => !matched.has(d));
+    const away = mealsAwayOn(ds);
     const extraHtml = extra.length
       ? `<div class="meals-cal-extra" title="On the ${escapeHtml(extra[0].cal)} calendar but not planned here">📅 Calendar says: ${extra.map((d) => escapeHtml(d.meal)).join(", ")}</div>`
       : "";
     return `
-      <div class="meals-day ${ds === today ? "today" : ""}" data-date="${ds}">
+      <div class="meals-day ${ds === today ? "today" : ""} ${away ? "away" : ""}" data-date="${ds}">
         <div class="meals-day-head">
           <h3>${escapeHtml(mealsFmtDate(ds))}</h3>
-          <button class="meals-day-add" data-date="${ds}" title="Add a meal to this day">+ Add</button>
+          <div class="meals-day-actions">
+            ${away ? "" : `<button class="meals-day-add" data-date="${ds}" title="Add a meal to this day">+ Add</button>`}
+            <button class="meals-day-away ${away ? "on" : ""}" data-date="${ds}" aria-pressed="${away ? "true" : "false"}"
+              title="${away ? "Not traveling after all — plan this day again" : "Traveling this day — nothing to plan"}">✈️ Away</button>
+          </div>
         </div>
         <div class="meals-day-body">
+          ${away ? `<div class="meals-away-banner">✈️ Traveling — nothing to plan${items.length ? ` <span class="hint">(${items.length} meal${items.length === 1 ? " is" : "s are"} still on this day — drag ${items.length === 1 ? "it" : "them"} elsewhere or remove)</span>` : ""}</div>` : ""}
           ${extraHtml}
-          <div class="rol-checklist meals-day-list">${itemsHtml || `<div class="journal-empty">Nothing planned.</div>`}</div>
+          ${away && !items.length ? "" : `<div class="rol-checklist meals-day-list">${itemsHtml || `<div class="journal-empty">Nothing planned.</div>`}</div>`}
         </div>
       </div>`;
   }).join("");
@@ -247,6 +260,9 @@ function renderMealsWeek() {
       form.scrollIntoView({ behavior: "smooth", block: "start" });
       document.getElementById("mealUrl").focus({ preventScroll: true });
     });
+  });
+  document.querySelectorAll("#mealsWeek .meals-day-away").forEach((btn) => {
+    btn.addEventListener("click", () => toggleMealAway([btn.dataset.date], !mealsAwayOn(btn.dataset.date), btn));
   });
   document.querySelectorAll("#mealsWeek .meal-drag-handle").forEach((handle) => {
     handle.addEventListener("pointerdown", (e) => mealsDragStart(e, handle));
@@ -493,14 +509,45 @@ async function saveMealMissing(planId, input) {
   renderMealsShopSummary();
 }
 
+// ---------- away (traveling) ----------
+function mealsAwayOn(ds) {
+  return mealsAway.some((a) => a.away_date === ds);
+}
+
+async function toggleMealAway(dates, on, btn) {
+  if (btn) btn.disabled = true;
+  let error;
+  if (on) {
+    const rows = dates.filter((d) => !mealsAwayOn(d)).map((d) => ({ away_date: d }));
+    if (rows.length) {
+      const res = await sb.from("meal_away").insert(rows).select("id, away_date, note");
+      error = res.error;
+      if (!error) mealsAway.push(...res.data);
+    }
+  } else {
+    const ids = mealsAway.filter((a) => dates.includes(a.away_date)).map((a) => a.id);
+    if (ids.length) {
+      ({ error } = await sb.from("meal_away").delete().in("id", ids));
+      if (!error) mealsAway = mealsAway.filter((a) => !ids.includes(a.id));
+    }
+  }
+  if (btn) btn.disabled = false;
+  if (error) { alert("Couldn't save: " + error.message); return; }
+  renderMealsWeek();
+}
+
+function mealsWeekDays() {
+  const days = [];
+  for (let i = 0; i < 7; i++) { const d = new Date(mealsWeekStart); d.setDate(d.getDate() + i); days.push(toLocalDateStr(d)); }
+  return days;
+}
+
 // One line above the week: which planned (not yet cooked) meals still need shopping.
 function renderMealsShopSummary(days) {
-  if (!days) {
-    days = [];
-    for (let i = 0; i < 7; i++) { const d = new Date(mealsWeekStart); d.setDate(d.getDate() + i); days.push(toLocalDateStr(d)); }
-  }
+  if (!days) days = mealsWeekDays();
   const el = document.getElementById("mealsShopSummary");
-  const open = mealsPlan.filter((p) => days.includes(p.plan_date) && !p.cooked_at);
+  // Nothing to shop for on days we're away.
+  const open = mealsPlan.filter((p) => days.includes(p.plan_date) && !p.cooked_at && !mealsAwayOn(p.plan_date));
   const need = open.filter((p) => p.shop_status === "need");
   const inCart = open.filter((p) => p.shop_status === "in_cart");
   if (!need.length && !inCart.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
@@ -1109,6 +1156,10 @@ document.getElementById("mealsPrevWeekBtn").addEventListener("click", () => {
 document.getElementById("mealsNextWeekBtn").addEventListener("click", () => {
   mealsWeekStart.setDate(mealsWeekStart.getDate() + 7);
   renderMeals();
+});
+document.getElementById("mealsAwayWeekBtn").addEventListener("click", (e) => {
+  const days = mealsWeekDays();
+  toggleMealAway(days, !days.every((ds) => mealsAwayOn(ds)), e.currentTarget);
 });
 document.getElementById("mealsThisWeekBtn").addEventListener("click", () => {
   mealsWeekStart = mealsMonday(new Date());

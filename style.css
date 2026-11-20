@@ -2292,6 +2292,22 @@ header .controls { grid-row: 3; grid-column: 1 / -1; flex-wrap: wrap; }
   cursor: pointer;
 }
 .meal-item { align-items: flex-start; }
+/* Traveling: a day marked Away needs no meals. */
+.meals-day-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.meals-day-away {
+  background: none;
+  border: 1px solid var(--panel-border);
+  color: var(--muted);
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.meals-day-away.on { border-color: #6366f1; color: #6366f1; background: #6366f11a; }
+.meals-day.away { border-style: dashed; background: #6366f10d; }
+.meals-day.away .meals-day-head h3 { text-decoration: none; opacity: 0.75; }
+.meals-away-banner { font-size: 13px; color: #6366f1; padding: 2px 0 6px; }
+.meals-away-banner .hint { color: var(--muted); }
 /* Drag a meal to another day by its grip. */
 .meal-drag-handle {
   flex: 0 0 auto;

@@ -66,6 +66,9 @@ async function loadTodayData() {
     sb.from("meal_plan").select("*, recipes(id, title, url)")
       .gte("plan_date", todayStr).lte("plan_date", toLocalDateStr(addDaysLocal(new Date(), MEALS_AHEAD_DAYS - 1)))
       .order("plan_date", { ascending: true }).order("id", { ascending: true }),
+    // Days marked "✈️ Away" on the meal plan — nothing to cook, so no dinner nags.
+    sb.from("meal_away").select("away_date")
+      .gte("away_date", todayStr).lte("away_date", toLocalDateStr(addDaysLocal(new Date(), MEALS_AHEAD_DAYS - 1))),
   ]);
 
   let results;
@@ -83,7 +86,7 @@ async function loadTodayData() {
     return;
   }
 
-  const [practicesRes, habitLogRes, peopleRes, openingsRes, businessesRes, logRes, planRes, prayersRes, disruptionsRes, consumptionRes, mealPlanRes] = results;
+  const [practicesRes, habitLogRes, peopleRes, openingsRes, businessesRes, logRes, planRes, prayersRes, disruptionsRes, consumptionRes, mealPlanRes, mealAwayRes] = results;
   todayData = {
     practices: practicesRes.data,
     habitLog: habitLogRes.data,
@@ -96,6 +99,7 @@ async function loadTodayData() {
     disruptions: disruptionsRes.data,
     consumption: consumptionRes.data,
     mealPlan: mealPlanRes.data,
+    mealAway: new Set((mealAwayRes.data || []).map((a) => a.away_date)),
   };
   todayLoadedOnce = true;
   statusEl.classList.add("hidden");
@@ -357,7 +361,7 @@ function todayHeadlines(now) {
     if (dinner) {
       const what = dinner.title.replace(/^\s*dinner\s*:\s*/i, "") || "planned";
       add("info", "🍽️", `Dinner: ${what}${dinner.allDay ? "" : ` at ${fmtTime(dinner.start)}`}`, "todayCalendarPanel");
-    } else if (now.getHours() < 20) {
+    } else if (now.getHours() < 20 && !todayData?.mealAway?.has(todayStr)) {
       add(now.getHours() >= 14 ? "warn" : "info", "🍽️", "No dinner on the calendar yet", "todayCalendarPanel");
     }
     const events = todayCalendar.events.filter((e) => !isDinner(e));
@@ -762,6 +766,7 @@ const TODAY_SHOP_LABELS = { need: "Need to shop", in_cart: "In cart", have: "Hav
 function renderTodayMeals(todayStr) {
   const plan = todayData.mealPlan || [];
   const el = document.getElementById("todayMeals");
+  const away = todayData.mealAway || new Set();
   const tonight = plan.filter((p) => p.plan_date === todayStr);
   const later = plan.filter((p) => p.plan_date > todayStr);
   const needShop = plan.filter((p) => !p.cooked_at && p.shop_status === "need");
@@ -814,7 +819,7 @@ function renderTodayMeals(todayStr) {
     <div class="today-subhead">Tonight</div>
     ${tonight.length
       ? `<div class="rol-checklist">${tonight.map((p) => mealRow(p, true)).join("")}</div>`
-      : `<div class="journal-empty">Nothing planned for today.</div>`}
+      : `<div class="journal-empty">${away.has(todayStr) ? "✈️ Traveling — nothing to plan." : "Nothing planned for today."}</div>`}
     ${[...byDay.entries()].map(([d, meals]) => `
       <div class="today-meal-day">
         <div class="today-meal-day-label">${escHtml(dayLabel(d))}</div>
