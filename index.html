@@ -82,7 +82,8 @@
                 <input type="text" id="mealTitle" placeholder="Recipe name — start typing to reuse a saved one" maxlength="200" required autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="mealTitleSuggest" />
                 <div id="mealTitleSuggest" class="meal-suggest hidden" role="listbox"></div>
               </div>
-              <label class="meal-date-label">Day <input type="date" id="mealDate" /></label>
+              <label class="meal-date-label">Day <input type="date" id="mealDate" />
+                <select id="mealSlot" aria-label="Lunch or dinner"><option value="dinner">Dinner</option><option value="lunch">Lunch</option></select></label>
               <label class="meal-nodate-label"><input type="checkbox" id="mealNoDate" /> No day — just save to Recipe Box</label>
               <button type="submit" id="mealAddBtn">Add</button>
             </div>
@@ -102,7 +103,7 @@
               <button id="mealsAwayWeekBtn" class="meals-away-week-btn">✈️ Away all week</button>
             </div>
           </div>
-          <p class="hint drawer-hint">Check a meal off once you've cooked it — that's what goes into the history. Mark each meal “Need”, “In cart” or “Have” to keep track of shopping. Click a recipe's name to see its history and notes. Traveling? Mark a day (or the whole week) “✈️ Away” and there's nothing to plan.</p>
+          <p class="hint drawer-hint">Check a meal off once you've cooked it — that's what goes into the history. Mark each meal “Need”, “In cart” or “Have” to keep track of shopping. Click a recipe's name to see its history and notes. Several meals can go on one day — tap Lunch or Dinner on a meal to switch it. Going out? “🍴 Eat out” on a day adds it without a recipe. Traveling? Mark a day (or the whole week) “✈️ Away” and there's nothing to plan.</p>
           <div id="mealsShopSummary" class="meals-shop-summary hidden"></div>
           <div id="mealsWeek" class="meals-week"></div>
         </section>

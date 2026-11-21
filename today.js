@@ -767,13 +767,23 @@ function renderTodayMeals(todayStr) {
   const plan = todayData.mealPlan || [];
   const el = document.getElementById("todayMeals");
   const away = todayData.mealAway || new Set();
-  const tonight = plan.filter((p) => p.plan_date === todayStr);
+  const isLunch = (p) => p.meal_slot === "lunch";
+  const lunchToday = plan.filter((p) => p.plan_date === todayStr && isLunch(p));
+  const tonight = plan.filter((p) => p.plan_date === todayStr && !isLunch(p));
   const later = plan.filter((p) => p.plan_date > todayStr);
-  const needShop = plan.filter((p) => !p.cooked_at && p.shop_status === "need");
+  const needShop = plan.filter((p) => !p.cooked_at && !p.eating_out && p.shop_status === "need");
 
   document.getElementById("todayMealsCount").textContent = plan.length ? `${plan.length} planned` : "";
 
   const mealRow = (p, canCook) => {
+    if (p.eating_out) {
+      const tag = canCook ? "" : (isLunch(p) ? `<span class="today-item-tag">lunch</span>` : "");
+      return `
+      <div class="today-meal-later-row">
+        <span class="today-meal-main">🍴 Eating out${p.eat_out_place ? ` — ${escHtml(p.eat_out_place)}` : ""}</span>
+        ${tag}
+      </div>`;
+    }
     const r = p.recipes || {};
     let link = "";
     try {
@@ -796,7 +806,7 @@ function renderTodayMeals(todayStr) {
     return `
       <div class="today-meal-later-row">
         <span class="today-meal-main">${title}${missing}</span>
-        ${shop}
+        ${shop || (isLunch(p) ? `<span class="today-item-tag">lunch</span>` : "")}
       </div>`;
   };
 
@@ -816,10 +826,12 @@ function renderTodayMeals(todayStr) {
 
   el.innerHTML = `
     ${shopLine}
+    ${lunchToday.length ? `<div class="today-subhead">Lunch</div>
+      <div class="rol-checklist">${lunchToday.map((p) => mealRow(p, true)).join("")}</div>` : ""}
     <div class="today-subhead">Tonight</div>
     ${tonight.length
       ? `<div class="rol-checklist">${tonight.map((p) => mealRow(p, true)).join("")}</div>`
-      : `<div class="journal-empty">${away.has(todayStr) ? "✈️ Traveling — nothing to plan." : "Nothing planned for today."}</div>`}
+      : `<div class="journal-empty">${away.has(todayStr) ? "✈️ Traveling — nothing to plan." : lunchToday.length ? "No dinner planned." : "Nothing planned for today."}</div>`}
     ${[...byDay.entries()].map(([d, meals]) => `
       <div class="today-meal-day">
         <div class="today-meal-day-label">${escHtml(dayLabel(d))}</div>

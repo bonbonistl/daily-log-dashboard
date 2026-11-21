@@ -189,32 +189,56 @@ function renderMealsWeek() {
     const items = mealsPlan.filter((p) => p.plan_date === ds).sort((a, b) => a.id - b.id);
     const dayDinners = dinners ? (dinners[ds] || []) : null;
     const matched = new Set();
-    const itemsHtml = items.map((p) => {
-      const r = mealsRecipes.find((x) => x.id === p.recipe_id);
-      if (!r) return "";
-      const by = p.cooked_at && p.cooked_by ? `<span class="plan-item-macro">cooked by ${escapeHtml(mealsWho(p.cooked_by))}</span>` : "";
+    const itemHtml = (p) => {
+      const r = p.eating_out ? null : mealsRecipes.find((x) => x.id === p.recipe_id);
+      if (!p.eating_out && !r) return "";
+      const name = p.eating_out ? (p.eat_out_place || "Eating out") : r.title;
       let cal = "";
-      if (dayDinners) {
-        const hit = mealsCalMatch(r, dayDinners);
+      // The calendar only has "Dinner: …" events, so only dinners get the check.
+      if (dayDinners && mealsSlot(p) === "dinner") {
+        const hit = mealsCalMatch(p, r, dayDinners);
         if (hit) matched.add(hit);
         cal = mealsCalHtml(hit);
       }
+      const grip = `<button type="button" class="meal-drag-handle" title="Drag to another day (or focus and use ← →)" aria-label="Move ${escapeHtml(name)} to another day">⠿</button>`;
+      const remove = `<button class="plan-item-remove meal-plan-remove" aria-label="Remove from this day" title="Remove from this day">&times;</button>`;
+      if (p.eating_out) {
+        return `
+        <div class="plan-item meal-item meal-eating-out" data-id="${p.id}">
+          ${grip}
+          <span class="meal-eat-out-icon" aria-hidden="true">🍴</span>
+          <div class="meal-item-body">
+            <div class="meal-item-title">Eating out ${mealsSlotHtml(p)}</div>
+            <input type="text" class="meal-eat-out-place" maxlength="200" placeholder="Where? (optional)" value="${escapeHtml(p.eat_out_place || "")}" />
+            ${cal}
+          </div>
+          ${remove}
+        </div>`;
+      }
+      const by = p.cooked_at && p.cooked_by ? `<span class="plan-item-macro">cooked by ${escapeHtml(mealsWho(p.cooked_by))}</span>` : "";
       return `
         <div class="plan-item meal-item ${p.cooked_at ? "done" : ""}" data-id="${p.id}">
-          <button type="button" class="meal-drag-handle" title="Drag to another day (or focus and use ← →)" aria-label="Move ${escapeHtml(r.title)} to another day">⠿</button>
+          ${grip}
           <label>
             <input type="checkbox" class="meal-cooked-toggle" ${p.cooked_at ? "checked" : ""} title="Cooked" />
           </label>
           <div class="meal-item-body">
-            <div class="meal-item-title">${mealsRecipeTitleHtml(r)}</div>
+            <div class="meal-item-title">${mealsRecipeTitleHtml(r)} ${mealsSlotHtml(p)}</div>
             ${by}
             ${cal}
             ${p.cooked_at ? (p.cook_note ? `<div class="meal-cook-note">${escapeHtml(p.cook_note)}</div>` : "") : mealsHaveHtml(p)}
             ${mealsRecipeTextHtml(r)}
           </div>
-          <button class="plan-item-remove meal-plan-remove" aria-label="Remove from this day" title="Remove from this day">&times;</button>
+          ${remove}
         </div>`;
-    }).join("");
+    };
+    // Lunch first, then dinner; a heading over each once the day has any lunch.
+    const lunch = items.filter((p) => mealsSlot(p) === "lunch");
+    const dinner = items.filter((p) => mealsSlot(p) === "dinner");
+    const itemsHtml = lunch.length
+      ? `<div class="meals-slot-head">Lunch</div>${lunch.map(itemHtml).join("")}`
+        + `<div class="meals-slot-head">Dinner</div>${dinner.map(itemHtml).join("") || `<div class="journal-empty">No dinner planned.</div>`}`
+      : dinner.map(itemHtml).join("");
     // A "Dinner: …" on the calendar that doesn't match anything planned here.
     const extra = (dayDinners || []).filter((d) => !matched.has(d));
     const away = mealsAwayOn(ds);
@@ -226,7 +250,8 @@ function renderMealsWeek() {
         <div class="meals-day-head">
           <h3>${escapeHtml(mealsFmtDate(ds))}</h3>
           <div class="meals-day-actions">
-            ${away ? "" : `<button class="meals-day-add" data-date="${ds}" title="Add a meal to this day">+ Add</button>`}
+            ${away ? "" : `<button class="meals-day-add" data-date="${ds}" title="Add a meal to this day">+ Add</button>
+            <button class="meals-day-eat-out" data-date="${ds}" title="Eating out for dinner this day (switch it to lunch on the card)">🍴 Eat out</button>`}
             <button class="meals-day-away ${away ? "on" : ""}" data-date="${ds}" aria-pressed="${away ? "true" : "false"}"
               title="${away ? "Not traveling after all — plan this day again" : "Traveling this day — nothing to plan"}">✈️ Away</button>
           </div>
@@ -248,6 +273,16 @@ function renderMealsWeek() {
   document.querySelectorAll("#mealsWeek .meal-missing").forEach((input) => {
     input.addEventListener("change", () => saveMealMissing(Number(input.closest(".meal-item").dataset.id), input));
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
+  });
+  document.querySelectorAll("#mealsWeek .meal-slot-btn").forEach((btn) => {
+    btn.addEventListener("click", () => setMealSlot(Number(btn.closest(".meal-item").dataset.id), btn.dataset.slot));
+  });
+  document.querySelectorAll("#mealsWeek .meal-eat-out-place").forEach((input) => {
+    input.addEventListener("change", () => saveEatOutPlace(Number(input.closest(".meal-item").dataset.id), input));
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
+  });
+  document.querySelectorAll("#mealsWeek .meals-day-eat-out").forEach((btn) => {
+    btn.addEventListener("click", () => addEatingOut(btn.dataset.date, btn));
   });
   renderMealsShopSummary(days);
   document.querySelectorAll("#mealsWeek .meal-plan-remove").forEach((btn) => {
@@ -326,8 +361,14 @@ function mealsCalDinners(days) {
 }
 
 // Same name, ignoring case/punctuation — or one name contains the other
-// ("Enchiladas" ↔ "Dinner: Enchiladas/Quesadillas").
-function mealsCalMatch(r, dayDinners) {
+// ("Enchiladas" ↔ "Dinner: Enchiladas/Quesadillas"). Eating out matches the place's
+// name, or a "Dinner: out" / "Dinner: eating out" / "Dinner: restaurant" event.
+function mealsCalMatch(p, r, dayDinners) {
+  if (p.eating_out) {
+    const place = mealsCalNorm(p.eat_out_place);
+    const hit = place && dayDinners.find((d) => d.norm === place || (place.length >= 4 && d.norm.includes(place)) || (d.norm.length >= 4 && place.includes(d.norm)));
+    return hit || dayDinners.find((d) => /\b(out|eat out|eating out|restaurant|takeout|take out)\b/.test(d.norm)) || null;
+  }
   const t = mealsCalNorm(r.title);
   if (!t) return null;
   return dayDinners.find((d) => d.norm === t)
@@ -509,6 +550,50 @@ async function saveMealMissing(planId, input) {
   renderMealsShopSummary();
 }
 
+// ---------- lunch / dinner, eating out ----------
+function mealsSlot(p) {
+  return p.meal_slot === "lunch" ? "lunch" : "dinner";
+}
+
+function mealsSlotHtml(p) {
+  const s = mealsSlot(p);
+  return `<span class="meal-slot" role="group" aria-label="Lunch or dinner">${["lunch", "dinner"].map((v) =>
+    `<button type="button" class="meal-slot-btn ${s === v ? "on" : ""}" data-slot="${v}" aria-pressed="${s === v}" title="${v === "lunch" ? "Make this lunch" : "Make this dinner"}">${v === "lunch" ? "Lunch" : "Dinner"}</button>`).join("")}</span>`;
+}
+
+async function setMealSlot(planId, slot) {
+  const p = mealsPlan.find((x) => x.id === planId);
+  if (!p || mealsSlot(p) === slot) return;
+  const prev = p.meal_slot;
+  p.meal_slot = slot;
+  renderMeals();
+  const { error } = await sb.from("meal_plan").update({ meal_slot: slot }).eq("id", planId);
+  if (error) { p.meal_slot = prev; renderMeals(); alert("Failed to update: " + error.message); }
+}
+
+async function addEatingOut(date, btn) {
+  if (btn) btn.disabled = true;
+  const { data, error } = await sb.from("meal_plan")
+    .insert({ plan_date: date, eating_out: true, meal_slot: "dinner" }).select().single();
+  if (btn) btn.disabled = false;
+  if (error) { alert("Couldn't add it: " + error.message); return; }
+  mealsPlan.push(data);
+  renderMeals();
+  const input = document.querySelector(`#mealsWeek .meal-item[data-id="${data.id}"] .meal-eat-out-place`);
+  if (input) input.focus();
+}
+
+async function saveEatOutPlace(planId, input) {
+  const p = mealsPlan.find((x) => x.id === planId);
+  if (!p) return;
+  const val = input.value.trim() || null;
+  if (val === (p.eat_out_place || null)) return;
+  const { error } = await sb.from("meal_plan").update({ eat_out_place: val }).eq("id", planId);
+  if (error) { alert("Failed to save: " + error.message); input.value = p.eat_out_place || ""; return; }
+  p.eat_out_place = val;
+  renderMealsWeek();
+}
+
 // ---------- away (traveling) ----------
 function mealsAwayOn(ds) {
   return mealsAway.some((a) => a.away_date === ds);
@@ -547,7 +632,7 @@ function renderMealsShopSummary(days) {
   if (!days) days = mealsWeekDays();
   const el = document.getElementById("mealsShopSummary");
   // Nothing to shop for on days we're away.
-  const open = mealsPlan.filter((p) => days.includes(p.plan_date) && !p.cooked_at && !mealsAwayOn(p.plan_date));
+  const open = mealsPlan.filter((p) => days.includes(p.plan_date) && !p.cooked_at && !p.eating_out && !mealsAwayOn(p.plan_date));
   const need = open.filter((p) => p.shop_status === "need");
   const inCart = open.filter((p) => p.shop_status === "in_cart");
   if (!need.length && !inCart.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
@@ -883,8 +968,8 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ---------- add ----------
-async function addMealPlan(recipeId, date) {
-  const { data, error } = await sb.from("meal_plan").insert({ recipe_id: recipeId, plan_date: date }).select().single();
+async function addMealPlan(recipeId, date, slot) {
+  const { data, error } = await sb.from("meal_plan").insert({ recipe_id: recipeId, plan_date: date, meal_slot: slot || "dinner" }).select().single();
   if (error) return error;
   mealsPlan.push(data);
   return null;
@@ -1131,7 +1216,7 @@ document.getElementById("mealAddForm").addEventListener("submit", async (e) => {
     }
 
     if (date) {
-      const err = await addMealPlan(recipe.id, date);
+      const err = await addMealPlan(recipe.id, date, document.getElementById("mealSlot").value);
       if (err) { alert("Saved the recipe, but couldn't add it to the day: " + err.message); renderMeals(); return; }
       mealsWeekStart = mealsMonday(new Date(date + "T00:00:00"));
     }
@@ -1173,6 +1258,7 @@ function syncMealNoDate() {
   const dateInput = document.getElementById("mealDate");
   if (!off && !dateInput.value) dateInput.value = todayLocalStr();
   dateInput.disabled = off;
+  document.getElementById("mealSlot").disabled = off;
   dateInput.closest(".meal-date-label").classList.toggle("is-off", off);
   document.getElementById("mealAddBtn").textContent = off ? "Save" : "Add";
 }

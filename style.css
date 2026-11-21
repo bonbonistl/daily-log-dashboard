@@ -2617,3 +2617,29 @@ a.lists-item-title:hover { text-decoration: underline; }
   .lists-nav-name { overflow: visible; }
   .lists-add-form > * { flex: 1 1 100% !important; }
 }
+
+/* Meals: lunch/dinner per meal, eating out */
+.meals-slot-head { grid-column: 1 / -1; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 2px; }
+.meals-slot-head ~ .meals-slot-head { margin-top: 6px; }
+.meal-slot { display: inline-flex; vertical-align: 1px; margin-left: 4px; white-space: nowrap; }
+.meal-slot-btn {
+  background: none; border: 1px solid var(--panel-border); color: var(--muted);
+  font-size: 10px; padding: 0 6px; line-height: 16px; cursor: pointer; font-family: inherit; margin-left: -1px;
+}
+.meal-slot-btn:first-child { border-radius: 999px 0 0 999px; margin-left: 0; }
+.meal-slot-btn:last-child { border-radius: 0 999px 999px 0; }
+.meal-slot-btn:hover { color: var(--text); }
+.meal-slot-btn.on { background: var(--panel-border); color: var(--text); }
+.meals-day-eat-out {
+  background: none; border: 1px solid var(--panel-border); color: var(--muted);
+  border-radius: 6px; font-size: 12px; padding: 3px 8px; cursor: pointer;
+}
+.meals-day-eat-out:hover, .meals-day-add:hover { color: var(--text); }
+.meal-eating-out { border-style: dashed; }
+.meal-eat-out-icon { font-size: 15px; line-height: 20px; }
+.meal-eat-out-place {
+  display: block; width: 100%; box-sizing: border-box; margin-top: 5px;
+  background: var(--bg); border: 1px solid var(--panel-border); color: var(--text);
+  padding: 4px 7px; border-radius: 6px; font-size: 12px; font-family: inherit;
+}
+#mealSlot { font: inherit; font-size: 13px; }
