@@ -116,7 +116,15 @@
         <section class="panel">
           <div class="panel-heading-row">
             <h2>Recipe Box <span class="hint" id="mealsRecipeCount"></span></h2>
-            <input type="search" id="mealsRecipeSearch" class="meals-search" placeholder="Search recipes…" />
+            <div class="meals-recipe-tools">
+              <select id="mealsRecipeSort" class="meals-sort" aria-label="Sort recipes">
+                <option value="recent">Recently cooked</option>
+                <option value="rating">Highest rated</option>
+                <option value="cooked">Most cooked</option>
+                <option value="title">A–Z</option>
+              </select>
+              <input type="search" id="mealsRecipeSearch" class="meals-search" placeholder="Search recipes…" />
+            </div>
           </div>
           <div id="mealsRecipes" class="meals-recipes"></div>
         </section>
@@ -804,6 +812,14 @@
       <h3>Family</h3>
       <p class="drawer-hint">Paper and House are shared with your family. Everything else is private to each person.</p>
       <div id="familyList" class="calendar-list"></div>
+      <form id="kidForm" class="detail-form hidden">
+        <div class="plan-add-form">
+          <select id="kidFamily" class="hidden" aria-label="Family"></select>
+          <input type="text" id="kidName" placeholder="Add a kid, e.g. Sam" maxlength="60" required />
+          <button type="submit">Add kid</button>
+        </div>
+        <p class="drawer-hint">Kids are just names for now — they don't sign in. Anyone in the family can rate meals for them.</p>
+      </form>
       <div id="familyAdminForms" class="hidden">
         <form id="inviteForm" class="detail-form hidden">
           <label>Family

@@ -5,6 +5,8 @@
 let mealsRecipes = [];   // [{id, title, url, url_key, source_text, notes, created_by, created_at}]
 let mealsPlan = [];      // [{id, recipe_id, plan_date, cooked_at, cooked_by, shop_status, missing_items, cook_note, created_by}]
 let mealsAway = [];      // [{id, away_date, note}] — days the family is traveling (nothing to plan)
+let mealsPeople = [];    // family_members: [{id, family_id, kind, display_name, email}] — adults + kids
+let mealsRatings = [];   // meal_ratings: [{id, meal_plan_id, member_id, stars}] — 0–4 per person per cook
 let mealsWeekStart = mealsMonday(new Date());
 let mealsTitleTouched = false; // stop auto-filling the title once it's been typed in
 let mealsSelectedRecipeId = null; // set when a saved recipe is picked from the name dropdown
@@ -120,13 +122,15 @@ async function loadMealsData() {
       sb.from("recipes").select("*").order("title"),
       sb.from("meal_plan").select("*").order("plan_date", { ascending: false }).order("id"),
       sb.from("meal_away").select("id, away_date, note").order("away_date"),
+      sb.from("family_members").select("id, family_id, kind, display_name, email, invited_at").order("invited_at"),
+      sb.from("meal_ratings").select("id, meal_plan_id, member_id, stars"),
     ]), 15000, "Loading meals");
   } catch (e) {
     loading.textContent = e.message;
     loading.classList.remove("hidden");
     return;
   }
-  const error = res[0].error || res[1].error || res[2].error;
+  const error = res.map((x) => x.error).find(Boolean);
   if (error) {
     loading.textContent = "Error loading data: " + error.message;
     loading.classList.remove("hidden");
@@ -135,6 +139,9 @@ async function loadMealsData() {
   mealsRecipes = res[0].data;
   mealsPlan = res[1].data;
   mealsAway = res[2].data;
+  // Adults first, then kids, each in the order they were added.
+  mealsPeople = [...res[3].data.filter((m) => m.kind !== "kid"), ...res[3].data.filter((m) => m.kind === "kid")];
+  mealsRatings = res[4].data;
   loading.classList.add("hidden");
   document.getElementById("mealsContent").classList.remove("hidden");
   markUpdated("mealsUpdatedAt");
@@ -701,16 +708,73 @@ function renderMealsHistory() {
   }).join("");
 }
 
+// ---------- ratings ----------
+// Each cook (a cooked meal_plan row) gets 0–4 stars per family member. A recipe's score
+// is the mean of every rating across all its cooks, so a dish that's consistently loved
+// beats one that was a hit once.
+function mealsPersonName(m) {
+  return m.display_name || mealsWho(m.email);
+}
+function mealsPeopleFor(familyId) {
+  return mealsPeople.filter((m) => m.family_id === familyId);
+}
+function mealsRecipeScore(recipeId) {
+  const cookIds = new Set(mealsCookedRows(recipeId).map((p) => p.id));
+  const rs = mealsRatings.filter((x) => cookIds.has(x.meal_plan_id));
+  if (!rs.length) return null;
+  return { avg: rs.reduce((t, x) => t + x.stars, 0) / rs.length, n: rs.length };
+}
+function mealsScoreHtml(score) {
+  if (!score) return "";
+  return `<span class="meal-score" title="Average of ${score.n} rating${score.n === 1 ? "" : "s"} (0–4 stars)">★ ${score.avg.toFixed(1)}<span class="meal-score-n">/4 · ${score.n}</span></span>`;
+}
+function mealsStarsHtml(planId, memberId) {
+  const cur = mealsRatings.find((x) => x.meal_plan_id === planId && x.member_id === memberId);
+  const v = cur ? cur.stars : null;
+  let h = `<button type="button" class="meal-star zero ${v === 0 ? "on" : ""}" data-stars="0" aria-label="0 stars" aria-pressed="${v === 0}">0</button>`;
+  for (let i = 1; i <= 4; i++) {
+    h += `<button type="button" class="meal-star ${v != null && v >= i ? "on" : ""}" data-stars="${i}" aria-label="${i} star${i === 1 ? "" : "s"}" aria-pressed="${v === i}">★</button>`;
+  }
+  return h;
+}
+async function setMealRating(planId, memberId, stars) {
+  const p = mealsPlan.find((x) => x.id === planId);
+  if (!p) return;
+  const cur = mealsRatings.find((x) => x.meal_plan_id === planId && x.member_id === memberId);
+  if (cur && cur.stars === stars) {
+    // Clicking the current rating clears it.
+    const { error } = await sb.from("meal_ratings").delete().eq("id", cur.id);
+    if (error) { alert("Couldn't clear the rating: " + error.message); return; }
+    mealsRatings = mealsRatings.filter((x) => x !== cur);
+  } else {
+    const { data, error } = await sb.from("meal_ratings")
+      .upsert({ family_id: p.family_id, meal_plan_id: planId, member_id: memberId, stars, updated_at: new Date().toISOString() },
+              { onConflict: "meal_plan_id,member_id" })
+      .select("id, meal_plan_id, member_id, stars").single();
+    if (error) { alert("Couldn't save the rating: " + error.message); return; }
+    if (cur) Object.assign(cur, data); else mealsRatings.push(data);
+  }
+  renderRecipeDrawer();
+  renderMealsRecipes();
+}
+
 // ---------- recipe box ----------
 function renderMealsRecipes() {
   const q = document.getElementById("mealsRecipeSearch").value.trim().toLowerCase();
   const rows = mealsRecipes.map((r) => {
     const cooked = mealsCookedRows(r.id);
     const last = cooked.reduce((m, p) => (p.plan_date > m ? p.plan_date : m), "");
-    return { r, count: cooked.length, last };
+    return { r, count: cooked.length, last, score: mealsRecipeScore(r.id) };
   })
-    .filter(({ r }) => !q || r.title.toLowerCase().includes(q) || (r.url || "").toLowerCase().includes(q) || (r.source_text || "").toLowerCase().includes(q))
-    .sort((a, b) => (b.last || "").localeCompare(a.last || "") || a.r.title.localeCompare(b.r.title));
+    .filter(({ r }) => !q || r.title.toLowerCase().includes(q) || (r.url || "").toLowerCase().includes(q) || (r.source_text || "").toLowerCase().includes(q));
+  const sort = document.getElementById("mealsRecipeSort").value;
+  const byTitle = (a, b) => a.r.title.localeCompare(b.r.title);
+  const byRecent = (a, b) => (b.last || "").localeCompare(a.last || "");
+  rows.sort(
+    sort === "rating" ? (a, b) => (b.score ? b.score.avg : -1) - (a.score ? a.score.avg : -1) || (b.score?.n || 0) - (a.score?.n || 0) || byRecent(a, b) || byTitle(a, b)
+    : sort === "cooked" ? (a, b) => b.count - a.count || byRecent(a, b) || byTitle(a, b)
+    : sort === "title" ? byTitle
+    : (a, b) => byRecent(a, b) || byTitle(a, b));
 
   document.getElementById("mealsRecipeCount").textContent = mealsRecipes.length ? `${mealsRecipes.length} saved` : "";
   const el = document.getElementById("mealsRecipes");
@@ -718,13 +782,13 @@ function renderMealsRecipes() {
     el.innerHTML = `<div class="journal-empty">${mealsRecipes.length ? "No recipes match." : "No recipes yet. Add one above."}</div>`;
     return;
   }
-  el.innerHTML = rows.map(({ r, count, last }) => {
+  el.innerHTML = rows.map(({ r, count, last, score }) => {
     const host = r.url_key ? r.url_key.split("/")[0] : (r.source_text ? "pasted" : "no link");
     const stats = count ? `cooked ${count}× · last ${escapeHtml(mealsFmtDate(last, { month: "short", day: "numeric", year: "numeric" }))}` : "never cooked";
     return `
       <div class="meals-recipe-row" data-id="${r.id}">
         <div class="meals-recipe-main">
-          <div class="meal-item-title">${mealsRecipeTitleHtml(r)}</div>
+          <div class="meal-item-title">${mealsRecipeTitleHtml(r)} ${mealsScoreHtml(score)}</div>
           <div class="plan-item-macro">${escapeHtml(host)} · ${stats}</div>
           ${mealsRecipeTextHtml(r)}
         </div>
@@ -830,9 +894,10 @@ function renderRecipeDrawer() {
   const today = todayLocalStr();
   const upcoming = rows.filter((p) => !p.cooked_at).sort((a, b) => a.plan_date.localeCompare(b.plan_date));
 
-  document.getElementById("recipeCookCount").textContent = cooked.length
-    ? `${cooked.length}× · last ${mealsFmtDate(cooked[0].plan_date, { month: "short", day: "numeric", year: "numeric" })}`
+  document.getElementById("recipeCookCount").innerHTML = cooked.length
+    ? `${cooked.length}× · last ${escapeHtml(mealsFmtDate(cooked[0].plan_date, { month: "short", day: "numeric", year: "numeric" }))} ${mealsScoreHtml(mealsRecipeScore(r.id))}`
     : "";
+  const people = mealsPeopleFor(r.family_id);
 
   document.getElementById("recipeCookHistory").innerHTML = cooked.length
     ? cooked.map((p) => `
@@ -842,6 +907,11 @@ function renderRecipeDrawer() {
           <span class="hint">${escapeHtml(mealsWho(p.cooked_by))}</span>
           <button class="plan-item-remove recipe-cook-remove" aria-label="Remove from history" title="Remove from history">&times;</button>
         </div>
+        ${people.length ? `<div class="recipe-ratings">${people.map((m) => `
+          <div class="recipe-rating-row" data-member="${escapeHtml(m.id)}">
+            <span class="recipe-rating-name">${escapeHtml(mealsPersonName(m))}</span>
+            <span class="meal-stars">${mealsStarsHtml(p.id, m.id)}</span>
+          </div>`).join("")}</div>` : ""}
         <input type="text" class="recipe-cook-note" maxlength="2000" placeholder="Add a note for this time…" value="${escapeHtml(p.cook_note || "")}" />
       </div>`).join("")
     : `<div class="journal-empty">Not cooked yet. Check it off on the plan, or log a time above.</div>`;
@@ -862,6 +932,12 @@ function renderRecipeDrawer() {
   hist.querySelectorAll(".recipe-cook-note").forEach((input) => {
     input.addEventListener("change", () => saveCookNote(Number(input.closest(".recipe-cook-row").dataset.id), input));
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
+  });
+  hist.querySelectorAll(".meal-star").forEach((btn) => {
+    btn.addEventListener("click", () => setMealRating(
+      Number(btn.closest(".recipe-cook-row").dataset.id),
+      btn.closest(".recipe-rating-row").dataset.member,
+      Number(btn.dataset.stars)));
   });
   hist.querySelectorAll(".recipe-cook-remove").forEach((btn) => {
     btn.addEventListener("click", () => removeMealPlan(Number(btn.closest(".recipe-cook-row").dataset.id)));
@@ -1234,6 +1310,7 @@ document.getElementById("mealAddForm").addEventListener("submit", async (e) => {
 });
 
 document.getElementById("mealsRecipeSearch").addEventListener("input", renderMealsRecipes);
+document.getElementById("mealsRecipeSort").addEventListener("change", renderMealsRecipes);
 document.getElementById("mealsPrevWeekBtn").addEventListener("click", () => {
   mealsWeekStart.setDate(mealsWeekStart.getDate() - 7);
   renderMeals();

@@ -19,7 +19,7 @@ function setFamilyStatus(msg) {
 async function loadFamilyData() {
   const [fams, mems] = await Promise.all([
     sb.from("families").select("id, name, created_at").order("created_at"),
-    sb.from("family_members").select("family_id, email, display_name, role, status, invited_at, joined_at").order("invited_at"),
+    sb.from("family_members").select("id, family_id, kind, email, display_name, role, status, invited_at, joined_at").order("invited_at"),
   ]);
   if (fams.error) throw fams.error;
   if (mems.error) throw mems.error;
@@ -42,25 +42,46 @@ async function renderFamilySection() {
 
   listEl.innerHTML = familyData.families.length
     ? familyData.families.map((f) => {
-        const members = familyData.members.filter((m) => m.family_id === f.id);
+        const inFam = familyData.members.filter((m) => m.family_id === f.id);
+        const members = [...inFam.filter((m) => m.kind !== "kid"), ...inFam.filter((m) => m.kind === "kid")];
         return `
         <div class="family-card">
           <div class="family-card-name">👪 ${escHtml(f.name)}</div>
-          ${members.map((m) => `
+          ${members.map((m) => m.kind === "kid" ? `
+            <div class="calendar-item">
+              <span>${escHtml(m.display_name)}</span>
+              <span class="family-member-actions">
+                <span class="family-badge kid">Kid</span>
+                <button type="button" class="family-rename" data-id="${escHtml(m.id)}">Rename</button>
+                <button type="button" class="calendar-remove family-remove" data-id="${escHtml(m.id)}">Remove</button>
+              </span>
+            </div>` : `
             <div class="calendar-item">
               <span>
                 ${escHtml(m.display_name || m.email)}${m.email === me ? " (you)" : ""}
                 <span class="muted family-email">${escHtml(m.email)}</span>
               </span>
               <span class="family-member-actions">
-                <span class="family-badge ${m.status === "invited" ? "invited" : ""}">${m.status === "invited" ? "Invited" : m.role === "admin" ? "Admin" : "Member"}</span>
-                ${admin && m.status === "invited" ? `<button type="button" class="family-resend" data-family="${escHtml(f.id)}" data-email="${escHtml(m.email)}">Resend</button>` : ""}
-                ${admin && m.email !== me ? `<button type="button" class="calendar-remove family-remove" data-family="${escHtml(f.id)}" data-email="${escHtml(m.email)}">Remove</button>` : ""}
+                <span class="family-badge ${m.status === "invited" ? "invited" : ""}">${m.status === "invited" ? "Invited" : m.role === "admin" ? "Admin" : "Adult"}</span>
+                ${admin && m.status === "invited" ? `<button type="button" class="family-resend" data-id="${escHtml(m.id)}">Resend</button>` : ""}
+                ${admin && m.email !== me ? `<button type="button" class="calendar-remove family-remove" data-id="${escHtml(m.id)}">Remove</button>` : ""}
               </span>
             </div>`).join("")}
         </div>`;
       }).join("")
     : `<div class="journal-empty">${admin ? "No families yet — create one below." : "You're not in a family yet."}</div>`;
+
+  // Kids can be added by anyone in the family (RLS allows kind='kid' rows in your own families).
+  const myFams = familyData.families.filter((f) => familyData.members.some((m) => m.family_id === f.id && m.email === me && m.status === "active"));
+  const kidFamily = document.getElementById("kidFamily");
+  kidFamily.innerHTML = myFams.map((f) => `<option value="${escHtml(f.id)}">${escHtml(f.name)}</option>`).join("");
+  kidFamily.classList.toggle("hidden", myFams.length < 2);
+  // Meals shows a star row per family member, so refresh it when people change.
+function familyPeopleChanged() {
+  if (!document.getElementById("mealsContent")?.classList.contains("hidden")) loadMealsData();
+}
+
+document.getElementById("kidForm").classList.toggle("hidden", !myFams.length);
 
   if (admin) {
     document.getElementById("inviteFamily").innerHTML = familyData.families
@@ -133,23 +154,60 @@ document.getElementById("inviteForm").addEventListener("submit", async (e) => {
   renderFamilySection();
 });
 
+document.getElementById("kidForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("kidName");
+  const display_name = input.value.trim();
+  const family_id = document.getElementById("kidFamily").value;
+  if (!display_name || !family_id) return;
+  setFamilyStatus("Adding…");
+  const { error } = await sb.from("family_members").insert({ family_id, kind: "kid", display_name, role: "member", status: "active" });
+  if (error) { setFamilyStatus("Couldn't add: " + error.message); return; }
+  input.value = "";
+  setFamilyStatus(`Added ${display_name}.`);
+  await renderFamilySection();
+  familyPeopleChanged();
+});
+
 document.getElementById("familyList").addEventListener("click", async (e) => {
   const resend = e.target.closest(".family-resend");
   const remove = e.target.closest(".family-remove");
-  const btn = resend || remove;
+  const rename = e.target.closest(".family-rename");
+  const btn = resend || remove || rename;
   if (!btn) return;
-  const family = familyData.families.find((f) => f.id === btn.dataset.family);
-  const member = familyData.members.find((m) => m.family_id === btn.dataset.family && m.email === btn.dataset.email);
+  const member = familyData.members.find((m) => m.id === btn.dataset.id);
+  const family = member && familyData.families.find((f) => f.id === member.family_id);
   if (!family || !member) return;
 
   if (resend) { openInviteEmail(family, member); setFamilyStatus("Gmail draft opened in a new tab."); return; }
 
-  if (!confirm(`Remove ${member.display_name || member.email} from ${family.name}? They'll immediately lose access to its Paper and House (and to the app, if this is their only family). Their private data is kept.`)) return;
+  if (rename) {
+    const name = (prompt("Name", member.display_name) || "").trim();
+    if (!name || name === member.display_name) return;
+    const { error } = await sb.from("family_members").update({ display_name: name }).eq("id", member.id);
+    if (error) { setFamilyStatus("Couldn't rename: " + error.message); return; }
+    renderFamilySection();
+    familyPeopleChanged();
+    return;
+  }
+
+  if (member.kind === "kid") {
+    if (!confirm(`Remove ${member.display_name} from ${family.name}? Their meal ratings will be deleted too.`)) return;
+    const { error } = await sb.from("family_members").delete().eq("id", member.id);
+    if (error) { setFamilyStatus("Couldn't remove: " + error.message); return; }
+    setFamilyStatus(`Removed ${member.display_name}.`);
+    renderFamilySection();
+    familyPeopleChanged();
+    return;
+  }
+
+  if (!confirm(`Remove ${member.display_name || member.email} from ${family.name}? They'll immediately lose access to its Paper and House (and to the app, if this is their only family), and their meal ratings are deleted. Their private data is kept.`)) return;
   setFamilyStatus("Removing…");
-  const { error } = await sb.from("family_members").delete().eq("family_id", family.id).eq("email", member.email);
+  const { error } = await sb.from("family_members").delete().eq("id", member.id);
   if (error) { setFamilyStatus("Couldn't remove: " + error.message); return; }
   setFamilyStatus(`Removed ${member.email}.`);
   renderFamilySection();
+  familyPeopleChanged();
 });
 
 document.getElementById("settingsBtn").addEventListener("click", () => { setFamilyStatus(""); renderFamilySection(); });
